@@ -1,0 +1,18 @@
+{
+  "sensor": {
+    "soundLevel": 42.6,
+    "threshold": 70,
+    "leakDetected": false,
+    "status": "normal",
+    "timestamp": 0
+  },
+  "device": {
+    "esp32": {
+      "online": true
+    },
+    "microphone": {
+      "name": "INMP441",
+      "active": true
+    }
+  }
+}
