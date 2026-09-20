@@ -1,10 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import "./App.css";
 import compressedAirImage from "./assets/compressed-air-system.jpg";
-
-import { ref, onValue, update } from "firebase/database";
-import { database } from "./firebase";
-
 
 import {
   LayoutDashboard,
@@ -12,43 +8,185 @@ import {
   Bell,
   History,
   Cpu,
-  Wifi,
   Mic2,
   Cloud,
   ShieldCheck,
   AlertTriangle,
+  Wifi,
+  ChevronRight,
 } from "lucide-react";
 
 
+const mockAlerts = [
+  {
+    id: "alert003",
+    node: "Node 03",
+    title: "Critical Air Leak",
+    severity: "critical",
+    soundLevel: 88.2,
+    threshold: 70,
+    state: "active",
+    createdAt: "Today, 01:05 PM",
+    description: "Abnormal acoustic activity detected",
+  },
+  {
+    id: "alert002",
+    node: "Node 02",
+    title: "Air Leak Warning",
+    severity: "warning",
+    soundLevel: 76.4,
+    threshold: 70,
+    state: "resolved",
+    createdAt: "Today, 12:58 PM",
+    description: "Sound level exceeded the warning threshold",
+  },
+  {
+    id: "alert005",
+    node: "Node 05",
+    title: "Critical Air Leak",
+    severity: "critical",
+    soundLevel: 91.7,
+    threshold: 70,
+    state: "active",
+    createdAt: "Today, 12:45 PM",
+    description: "High acoustic activity detected",
+  },
+  {
+    id: "alert004",
+    node: "Node 04",
+    title: "Air Leak Warning",
+    severity: "warning",
+    soundLevel: 73.1,
+    threshold: 70,
+    state: "resolved",
+    createdAt: "Today, 12:32 PM",
+    description: "Sound level slightly exceeded threshold",
+  },
+  {
+    id: "alert001",
+    node: "Node 01",
+    title: "Critical Air Leak",
+    severity: "critical",
+    soundLevel: 84.6,
+    threshold: 70,
+    state: "resolved",
+    createdAt: "Today, 12:20 PM",
+    description: "Abnormal acoustic activity detected",
+  },
+];
+
+/* =========================================================
+   MOCK SENSOR DATA
+   ========================================================= */
+
+const SENSOR_DATA = {
+  soundLevel: 88.2,
+  threshold: 70,
+  status: "critical",
+  leakDetected: true,
+};
+
+/* =========================================================
+   MOCK ALERT DATA
+   ========================================================= */
+
+const INITIAL_ALERTS = [
+  {
+    id: "alert008",
+    node: "Node 03",
+    severity: "critical",
+    soundLevel: 88.2,
+    threshold: 70,
+    state: "active",
+    createdAt: Date.now() - 2 * 60 * 1000,
+  },
+  {
+    id: "alert007",
+    node: "Node 02",
+    severity: "warning",
+    soundLevel: 76.4,
+    threshold: 70,
+    state: "active",
+    createdAt: Date.now() - 5 * 60 * 1000,
+  },
+  {
+    id: "alert006",
+    node: "Node 05",
+    severity: "critical",
+    soundLevel: 91.7,
+    threshold: 70,
+    state: "active",
+    createdAt: Date.now() - 9 * 60 * 1000,
+  },
+  {
+    id: "alert005",
+    node: "Node 04",
+    severity: "warning",
+    soundLevel: 73.1,
+    threshold: 70,
+    state: "resolved",
+    createdAt: Date.now() - 16 * 60 * 1000,
+  },
+  {
+    id: "alert004",
+    node: "Node 01",
+    severity: "critical",
+    soundLevel: 84.6,
+    threshold: 70,
+    state: "resolved",
+    createdAt: Date.now() - 25 * 60 * 1000,
+  },
+  {
+    id: "alert003",
+    node: "Node 03",
+    severity: "critical",
+    soundLevel: 88.2,
+    threshold: 70,
+    state: "resolved",
+    createdAt: Date.now() - 40 * 60 * 1000,
+  },
+  {
+    id: "alert002",
+    node: "Node 02",
+    severity: "warning",
+    soundLevel: 74.5,
+    threshold: 70,
+    state: "resolved",
+    createdAt: Date.now() - 55 * 60 * 1000,
+  },
+  {
+    id: "alert001",
+    node: "Node 01",
+    severity: "critical",
+    soundLevel: 82.6,
+    threshold: 70,
+    state: "resolved",
+    createdAt: Date.now() - 75 * 60 * 1000,
+  },
+];
+
+/* =========================================================
+   APP
+   ========================================================= */
 
 function App() {
-
   const [activePage, setActivePage] = useState("dashboard");
+  const [alerts, setAlerts] = useState(INITIAL_ALERTS);
 
-  const [sensorData, setSensorData] = useState({
-    soundLevel: 0,
-    threshold: 70,
-    status: "normal",
-    leakDetected: false,
-    timestamp: 0,
-  });
+  const soundLevel = SENSOR_DATA.soundLevel;
+  const threshold = SENSOR_DATA.threshold;
 
-  useEffect(() => {
-    const sensorRef = ref(database, "sensor");
+  const activeAlerts = alerts.filter(
+    (alert) => alert.state === "active"
+  );
 
-    const unsubscribe = onValue(sensorRef, (snapshot) => {
-      const data = snapshot.val();
+  const resolvedAlerts = alerts.filter(
+    (alert) => alert.state === "resolved"
+  );
 
-      if (data) {
-        setSensorData(data);
-      }
-    });
+  const totalAlerts = alerts.length;
 
-    return () => unsubscribe();
-  }, []);
-
-  const soundLevel = sensorData.soundLevel;
-  const threshold = sensorData.threshold;
+  const [selectedAlert, setSelectedAlert] = useState(null);
 
   const navItems = [
     {
@@ -71,22 +209,38 @@ function App() {
       label: "History",
       icon: History,
     },
-    {
-      id: "device",
-      label: "Device",
-      icon: Cpu,
-    },
+    
   ];
+
+  /* =======================================================
+     RESOLVE ALERT
+     ======================================================= */
+
+  function resolveAlert(id) {
+    setAlerts((currentAlerts) =>
+      currentAlerts.map((alert) =>
+        alert.id === id
+          ? {
+              ...alert,
+              state: "resolved",
+            }
+          : alert
+      )
+    );
+  }
 
   return (
     <div className="app">
-      {/* =========================
+
+      {/* ===================================================
           SIDEBAR
-      ========================== */}
+      =================================================== */}
+
       <aside className="sidebar">
+
         <div className="brand">
           <div className="brand-icon">
-            <Activity size={23} />
+            <Activity size={24} />
           </div>
 
           <div>
@@ -96,9 +250,12 @@ function App() {
           </div>
         </div>
 
-        <p className="sidebar-title">MONITORING</p>
+        <div className="sidebar-section-title">
+          MONITORING
+        </div>
 
         <nav className="nav-menu">
+
           {navItems.map((item) => {
             const Icon = item.icon;
 
@@ -110,47 +267,34 @@ function App() {
                 }`}
                 onClick={() => setActivePage(item.id)}
               >
-                <Icon size={18} />
+                <Icon size={19} />
 
                 <span>{item.label}</span>
 
-                {item.id === "alerts" && (
-  <span className="alert-number">
-    {sensorData.leakDetected ? 1 : 0}
-  </span>
-)}
+                {item.id === "alerts" &&
+                  activeAlerts.length > 0 && (
+                    <span className="alert-number">
+                      {activeAlerts.length}
+                    </span>
+                  )}
               </button>
             );
           })}
+
         </nav>
 
-        <div className="sidebar-system">
-          <p>SYSTEM STATUS</p>
-
-          <SystemMini
-            icon={<Cpu size={16} />}
-            name="ESP32"
-            status="Online"
-          />
-
-          <SystemMini
-            icon={<Mic2 size={16} />}
-            name="INMP441"
-            status="Active"
-          />
-
-          <SystemMini
-            icon={<Cloud size={16} />}
-            name="Firebase"
-            status="Connected"
-          />
-        </div>
       </aside>
 
-      {/* =========================
-          MAIN CONTENT
-      ========================== */}
+      {/* ===================================================
+          MAIN
+      =================================================== */}
+
       <main className="main-content">
+
+        {/* =================================================
+            DASHBOARD
+        ================================================= */}
+
         {activePage === "dashboard" && (
           <>
             <DashboardHero />
@@ -158,16 +302,21 @@ function App() {
             <Dashboard
               soundLevel={soundLevel}
               threshold={threshold}
+              alerts={alerts}
             />
           </>
         )}
+
+        {/* =================================================
+            LIVE MONITOR
+        ================================================= */}
 
         {activePage === "live" && (
           <>
             <SimplePageHeader
               page="Live Monitor"
-              title="Compressed Air Leak Detection"
-              subtitle="Real-Time Monitoring Dashboard"
+              title="Real-Time Acoustic Monitoring"
+              subtitle="Continuous sound monitoring from the INMP441 microphone."
             />
 
             <LiveMonitor
@@ -177,42 +326,53 @@ function App() {
           </>
         )}
 
+        {/* =================================================
+            ALERTS
+        ================================================= */}
+
         {activePage === "alerts" && (
           <>
             <SimplePageHeader
               page="Alerts"
-              title="Compressed Air Leak Detection"
-              subtitle="Real-Time Monitoring Dashboard"
+              title="Leak Alerts"
+              subtitle="Monitor active and resolved acoustic leak events."
             />
 
-           <Alerts
-  soundLevel={soundLevel}
-  threshold={threshold}
-  leakDetected={sensorData.leakDetected}
-  status={sensorData.status}
-  timestamp={sensorData.timestamp}
-/>
+            <AlertsPage
+              alerts={alerts}
+              selectedAlert={selectedAlert}
+              setSelectedAlert={setSelectedAlert}
+              resolveAlert={resolveAlert}
+            />
           </>
         )}
+
+        {/* =================================================
+            HISTORY
+        ================================================= */}
 
         {activePage === "history" && (
           <>
             <SimplePageHeader
               page="History"
-              title="Compressed Air Leak Detection"
-              subtitle="Real-Time Monitoring Dashboard"
+              title="Monitoring History"
+              subtitle="Previous acoustic readings and detection events."
             />
 
             <HistoryPage />
           </>
         )}
 
+        {/* =================================================
+            DEVICE
+        ================================================= */}
+
         {activePage === "device" && (
           <>
             <SimplePageHeader
               page="Device"
-              title="Compressed Air Leak Detection"
-              subtitle="Real-Time Monitoring Dashboard"
+              title="Connected Hardware"
+              subtitle="ESP32 and INMP441 monitoring components."
             />
 
             <DevicePage
@@ -221,6 +381,7 @@ function App() {
             />
           </>
         )}
+
       </main>
     </div>
   );
@@ -228,7 +389,7 @@ function App() {
 
 /* =========================================================
    DASHBOARD HERO
-========================================================= */
+   ========================================================= */
 
 function DashboardHero() {
   return (
@@ -239,7 +400,9 @@ function DashboardHero() {
       }}
     >
       <div className="dashboard-hero-overlay">
+
         <div className="hero-top">
+
           <div>
             <p className="hero-breadcrumb">
               Monitoring / Dashboard
@@ -247,33 +410,35 @@ function DashboardHero() {
 
             <h1>Acoustic Leak Monitor</h1>
 
-<p className="hero-project-name">
-  Compressed Air Leak Detection
-</p>
+            <p className="hero-project-name">
+              Compressed Air Leak Detection
+            </p>
 
-<p className="hero-subtitle">
-  Real-Time Monitoring Dashboard
-</p>
+            <p className="hero-subtitle">
+              Real-Time Monitoring Dashboard
+            </p>
           </div>
 
           <div className="hero-online">
-            <span></span>
-            ESP32 Online
+            <span className="online-dot"></span>
+            <strong>ESP32 Online</strong>
           </div>
+
         </div>
 
         <div className="hero-monitoring">
-          <span></span>
+          <span className="online-dot"></span>
           System Monitoring
         </div>
+
       </div>
     </section>
   );
 }
 
 /* =========================================================
-   SIMPLE HEADER FOR OTHER PAGES
-========================================================= */
+   SIMPLE HEADER
+   ========================================================= */
 
 function SimplePageHeader({
   page,
@@ -282,6 +447,7 @@ function SimplePageHeader({
 }) {
   return (
     <header className="topbar">
+
       <div>
         <p className="breadcrumb">
           Monitoring / {page}
@@ -295,60 +461,129 @@ function SimplePageHeader({
       </div>
 
       <div className="online-badge">
-        <span></span>
+        <span className="online-dot"></span>
         ESP32 Online
       </div>
+
     </header>
   );
 }
 
 /* =========================================================
    DASHBOARD
-========================================================= */
+   ========================================================= */
 
 function Dashboard({
   soundLevel,
   threshold,
+  alerts,
 }) {
+  const totalAlerts = alerts.length;
+
+  const activeAlerts = alerts.filter(
+    (alert) => alert.state === "active"
+  ).length;
+
+  const resolvedAlerts = alerts.filter(
+    (alert) => alert.state === "resolved"
+  ).length;
+
+  const criticalAlerts = alerts.filter(
+    (alert) => alert.severity === "critical"
+  ).length;
+
   const risk = Math.round(
     (soundLevel / threshold) * 100
   );
 
+  const riskStatus =
+    soundLevel >= threshold
+      ? "CRITICAL"
+      : soundLevel >= threshold * 0.8
+      ? "WARNING"
+      : "NORMAL";
+
   return (
-    <>
-      {/* SOUND + LEAK */}
-      <section className="hero-grid">
-        <SoundMeter
-          soundLevel={soundLevel}
+    <div className="dashboard">
+
+      {/* =================================================
+          SUMMARY
+      ================================================= */}
+
+      <section className="summary-grid">
+
+        <SummaryCard
+          icon={<Bell size={21} />}
+          title="Total Alerts"
+          value={totalAlerts}
+          text="Recorded events"
         />
 
-        <div className="panel leak-panel">
-          <p className="small-title">
-            LEAK ANALYSIS
-          </p>
+        <SummaryCard
+          icon={<AlertTriangle size={21} />}
+          title="Active Alerts"
+          value={activeAlerts}
+          text="Require attention"
+          type="active"
+        />
+
+        <SummaryCard
+          icon={<ShieldCheck size={21} />}
+          title="Resolved Alerts"
+          value={resolvedAlerts}
+          text="Issues cleared"
+          type="resolved"
+        />
+
+        <SummaryCard
+          icon={<AlertTriangle size={21} />}
+          title="Critical Alerts"
+          value={criticalAlerts}
+          text="High severity events"
+          type="critical"
+        />
+
+      </section>
+
+      {/* =================================================
+          SOUND + LEAK
+      ================================================= */}
+
+      <section className="hero-grid">
+
+  <div className="panel leak-panel">
+
+    <p className="small-title">
+      LEAK ANALYSIS
+    </p>
 
           <h3>Leak Risk</h3>
 
           <div className="risk-heading">
-            <strong>LOW</strong>
+
+            <strong
+              className={`risk-status ${riskStatus.toLowerCase()}`}
+            >
+              {riskStatus}
+            </strong>
 
             <span>
               {risk}% of threshold
             </span>
+
           </div>
 
           <div className="risk-track">
+
             <div
-              className="risk-fill"
+              className={`risk-fill ${riskStatus.toLowerCase()}`}
               style={{
-                width: `${Math.min(
-                  risk,
-                  100
-                )}%`,
+                width: `${Math.min(risk, 100)}%`,
               }}
             ></div>
 
             <span className="risk-marker"></span>
+
           </div>
 
           <div className="risk-labels">
@@ -358,729 +593,222 @@ function Dashboard({
           </div>
 
           <div className="threshold-row">
+
             <div>
               <AlertTriangle size={18} />
-              Leak Threshold
+              <span>Leak Threshold</span>
             </div>
 
             <strong>
               {threshold} dB
             </strong>
+
           </div>
 
-          <div className="safe-message">
-            <ShieldCheck size={22} />
+          <div
+            className={`detection-message ${
+              soundLevel >= threshold
+                ? "danger"
+                : ""
+            }`}
+          >
+
+            {soundLevel >= threshold ? (
+              <AlertTriangle size={22} />
+            ) : (
+              <ShieldCheck size={22} />
+            )}
 
             <div>
+
               <strong>
-                No Leak Detected
+                {soundLevel >= threshold
+                  ? "Leak Detected"
+                  : "No Leak Detected"}
               </strong>
 
               <span>
-                System operating normally
+                {soundLevel >= threshold
+                  ? "Sound level is above the threshold"
+                  : "System operating normally"}
               </span>
+
             </div>
+
           </div>
+
         </div>
+
       </section>
 
-      {/* LIVE WAVEFORM */}
-      <section className="panel waveform-panel">
-        <div className="panel-header">
-          <div>
-            <p className="small-title">
-              ACOUSTIC SIGNAL
-            </p>
+      
 
-            <h3>
-              Live Sound Waveform
-            </h3>
+      {/* =================================================
+          RECENT ALERTS
+      ================================================= */}
 
-            <span>
-              Real-time INMP441 microphone
-              activity
-            </span>
-          </div>
+      <RecentAlerts alerts={alerts} />
 
-          <div className="chart-legend">
-            <span className="legend-live"></span>
-            Live signal
-
-            <span className="legend-threshold"></span>
-            70 dB threshold
-          </div>
-        </div>
-
-        <SoundWave />
-      </section>
-
-      {/* SYSTEM HEALTH + EVENTS */}
-      <section className="bottom-grid">
-        <div className="panel bottom-panel">
-          <div className="panel-header">
-            <div>
-              <p className="small-title">
-                SYSTEM
-              </p>
-
-              <h3>
-                System Health
-              </h3>
-            </div>
-
-            <Activity size={19} />
-          </div>
-
-          <div className="health-grid">
-            <HealthItem
-              icon={<Cpu size={18} />}
-              name="ESP32"
-              status="Online"
-            />
-
-            <HealthItem
-              icon={<Mic2 size={18} />}
-              name="INMP441"
-              status="Active"
-            />
-
-            <HealthItem
-              icon={<Wifi size={18} />}
-              name="Wi-Fi"
-              status="Good"
-            />
-
-            <HealthItem
-              icon={<Cloud size={18} />}
-              name="Firebase"
-              status="Connected"
-            />
-          </div>
-        </div>
-
-        <div className="panel bottom-panel">
-          <div className="panel-header">
-            <div>
-              <p className="small-title">
-                EVENTS
-              </p>
-
-              <h3>
-                Recent Activity
-              </h3>
-            </div>
-
-            <History size={19} />
-          </div>
-
-          <div className="event">
-            <div className="event-icon safe-event">
-              <ShieldCheck size={18} />
-            </div>
-
-            <div>
-              <strong>
-                System Normal
-              </strong>
-
-              <span>
-                No leak detected
-              </span>
-            </div>
-
-            <small>
-              Just now
-            </small>
-          </div>
-
-          <div className="event">
-            <div className="event-icon">
-              <Mic2 size={18} />
-            </div>
-
-            <div>
-              <strong>
-                Sound Reading Updated
-              </strong>
-
-              <span>
-                {soundLevel} dB recorded
-              </span>
-            </div>
-
-            <small>
-              5 sec ago
-            </small>
-          </div>
-        </div>
-      </section>
-    </>
+    </div>
   );
 }
 
 /* =========================================================
-   LIVE MONITOR
-========================================================= */
+   SUMMARY CARD
+   ========================================================= */
 
-function LiveMonitor({
-  soundLevel,
-  threshold,
+function SummaryCard({
+  icon,
+  title,
+  value,
+  text,
+  type = "",
 }) {
   return (
-    <section>
-      <PageTitle
-        label="LIVE MONITOR"
-        title="Real-Time Acoustic Monitoring"
-        description="Continuous sound monitoring from the INMP441 microphone."
-      />
+    <div className={`summary-card ${type}`}>
 
-      <section className="hero-grid">
-        <SoundMeter
-          soundLevel={soundLevel}
-        />
+      <div className="summary-icon">
+        {icon}
+      </div>
 
-        <div className="panel leak-panel">
+      <div className="summary-content">
+
+        <span>{title}</span>
+
+        <strong>{value}</strong>
+
+        <small>{text}</small>
+
+      </div>
+
+    </div>
+  );
+}
+
+/* =========================================================
+   RECENT ALERTS
+   ========================================================= */
+
+function RecentAlerts({ alerts }) {
+  return (
+    <section className="panel recent-alerts-panel">
+
+      <div className="panel-header">
+
+        <div>
           <p className="small-title">
-            CURRENT ANALYSIS
+            ALERTS
           </p>
 
-          <h3>
-            Detection Information
-          </h3>
-
-          <div className="info-list">
-            <InfoRow
-              label="Current Level"
-              value={`${soundLevel} dB`}
-            />
-
-            <InfoRow
-              label="Leak Threshold"
-              value={`${threshold} dB`}
-            />
-
-            <InfoRow
-              label="Status"
-              value="Normal"
-              green
-            />
-
-            <InfoRow
-              label="Sensor"
-              value="INMP441"
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="panel waveform-panel">
-        <div className="panel-header">
-          <div>
-            <p className="small-title">
-              LIVE SIGNAL
-            </p>
-
-            <h3>
-              Acoustic Waveform
-            </h3>
-          </div>
-
-          <span className="live-text">
-            ● LIVE
-          </span>
-        </div>
-
-        <SoundWave />
-      </section>
-    </section>
-  );
-}
-
-/* =========================================================
-   ALERTS
-========================================================= */
-
-function Alerts({
-  soundLevel,
-  threshold,
-  leakDetected,
-  status,
-  timestamp,
-}) {
-  const [showDetails, setShowDetails] = useState(false);
-  const [alert, setAlert] = useState(null);
-
-  // Listen to the saved alert from Firebase
-  useEffect(() => {
-    const alertRef = ref(database, "alerts/alert001");
-
-    const unsubscribe = onValue(alertRef, (snapshot) => {
-      const data = snapshot.val();
-
-      if (data) {
-        setAlert(data);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Create/update the alert lifecycle
-  useEffect(() => {
-    const alertRef = ref(database, "alerts/alert001");
-
-    if (leakDetected === true) {
-      // Create an active alert if one does not exist
-      if (!alert) {
-        update(alertRef, {
-          node: "Node 03",
-          soundLevel: soundLevel,
-          threshold: threshold,
-          severity: status === "critical" ? "critical" : "warning",
-          state: "active",
-          createdAt: timestamp || Date.now(),
-          acknowledgedAt: null,
-          resolvedAt: null,
-        });
-      }
-    }
-
-    // Sensor has returned to normal
-    if (
-      leakDetected === false &&
-      alert &&
-      alert.state !== "resolved"
-    ) {
-      update(alertRef, {
-        state: "resolved",
-        resolvedAt: Date.now(),
-        resolvedSoundLevel: soundLevel,
-      });
-    }
-  }, [
-    leakDetected,
-    soundLevel,
-    threshold,
-    status,
-    timestamp,
-    alert,
-  ]);
-
-  // Acknowledge the alert
-  const handleAcknowledge = async () => {
-    const alertRef = ref(database, "alerts/alert001");
-
-    await update(alertRef, {
-      state: "acknowledged",
-      acknowledgedAt: Date.now(),
-    });
-  };
-
-  if (!alert) {
-    return (
-      <section>
-        <PageTitle
-          label="ALERT CENTER"
-          title="Leak Alerts"
-          description="Abnormal acoustic activity and leak detection events."
-        />
-
-        <div className="small-alert-box no-alert-box">
-          <div className="small-alert-icon safe-icon">
-            <ShieldCheck size={20} />
-          </div>
-
-          <div className="small-alert-content">
-            <strong>No Active Alerts</strong>
-            <span>System is operating normally</span>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  const alertState = alert.state || "active";
-
-  const isActive = alertState === "active";
-  const isAcknowledged = alertState === "acknowledged";
-  const isResolved = alertState === "resolved";
-
-  const displaySoundLevel = isResolved
-    ? alert.resolvedSoundLevel ?? soundLevel
-    : alert.soundLevel ?? soundLevel;
-
-  const alertTime = alert.createdAt
-    ? new Date(alert.createdAt).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "Just now";
-
-  const acknowledgedTime = alert.acknowledgedAt
-    ? new Date(alert.acknowledgedAt).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "-";
-
-  const resolvedTime = alert.resolvedAt
-    ? new Date(alert.resolvedAt).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "-";
-
-  return (
-    <section>
-      <PageTitle
-        label="ALERT CENTER"
-        title="Leak Alerts"
-        description="Abnormal acoustic activity and leak detection events."
-      />
-
-      {/* LONG ALERT BOX */}
-      <div
-        className={`long-alert-box ${
-          isAcknowledged
-            ? "acknowledged"
-            : isResolved
-            ? "resolved"
-            : ""
-        }`}
-        onClick={() => setShowDetails(true)}
-      >
-        {/* ICON */}
-        <div className="long-alert-icon">
-          {isResolved ? (
-            <ShieldCheck size={22} />
-          ) : isAcknowledged ? (
-            <ShieldCheck size={22} />
-          ) : (
-            <AlertTriangle size={22} />
-          )}
-        </div>
-
-        {/* MAIN INFORMATION */}
-        <div className="long-alert-content">
-          <strong>
-            {isResolved
-              ? "Node 03 — Air Leak Resolved"
-              : `Node 03 — ${
-                  alert.severity === "critical"
-                    ? "Critical Air Leak Detected"
-                    : "Air Leak Warning"
-                }`}
-          </strong>
+          <h3>Recent Alerts</h3>
 
           <span>
-            {isResolved
-              ? "Sound level returned below the leak threshold"
-              : "Abnormal acoustic activity detected"}
+            Latest activity from monitoring nodes
           </span>
         </div>
 
-        {/* SOUND LEVEL */}
-        <div className="long-alert-reading">
-          <strong>{displaySoundLevel} dB</strong>
-          <span>Sound Level</span>
-        </div>
+        <Bell size={20} />
 
-        {/* STATUS */}
-        <div
-          className={`long-alert-status ${
-            isAcknowledged
-              ? "status-acknowledged"
-              : isResolved
-              ? "status-resolved"
-              : ""
-          }`}
-        >
-          {isResolved
-            ? "✓ RESOLVED"
-            : isAcknowledged
-            ? "✓ ACKNOWLEDGED"
-            : "● ACTIVE"}
-        </div>
-
-        {/* ARROW */}
-        <div className="long-alert-arrow">
-          →
-        </div>
       </div>
 
-      {/* POPUP */}
-      {showDetails && (
-        <div
-          className="alert-popup-overlay"
-          onClick={() => setShowDetails(false)}
-        >
-          <div
-            className="alert-popup"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* HEADER */}
-            <div className="alert-popup-header">
-              <div className="popup-alert-icon">
-                {isResolved ? (
-                  <ShieldCheck size={22} />
+      <div className="recent-alert-list">
+
+        {alerts.slice(0, 5).map((alert) => {
+
+          const resolved =
+            alert.state === "resolved";
+
+          return (
+            <div
+              key={alert.id}
+              className={`recent-alert ${
+                resolved
+                  ? "resolved"
+                  : "active"
+              }`}
+            >
+
+              <div className="recent-alert-icon">
+
+                {resolved ? (
+                  <ShieldCheck size={19} />
                 ) : (
-                  <AlertTriangle size={22} />
+                  <AlertTriangle size={19} />
                 )}
+
               </div>
 
-              <div>
-                <h3>
-                  {isResolved
-                    ? "Node 03 — Air Leak Resolved"
-                    : "Node 03 — Critical Air Leak"}
-                </h3>
+              <div className="recent-alert-info">
+
+                <strong>
+                  {alert.node} —{" "}
+                  {alert.severity === "critical"
+                    ? "Critical Air Leak"
+                    : "Air Leak Warning"}
+                </strong>
 
                 <span>
-                  {isResolved
-                    ? "Leak condition has been resolved"
-                    : "Abnormal acoustic activity detected"}
+                  Abnormal acoustic activity detected
                 </span>
+
               </div>
 
-              <button
-                className="popup-close"
-                onClick={() => setShowDetails(false)}
+              <div className="recent-alert-reading">
+
+                <strong>
+                  {alert.soundLevel}
+                </strong>
+
+                <span>
+                  Sound Level
+                </span>
+
+              </div>
+
+              <div
+                className={`alert-status ${
+                  resolved
+                    ? "resolved-status"
+                    : "active-status"
+                }`}
               >
-                ×
-              </button>
-            </div>
-
-            {/* DETAILS */}
-            <div className="alert-popup-details">
-
-              <div className="popup-detail">
-                <span>Node</span>
-                <strong>Node 03</strong>
+                <span></span>
+                {resolved
+                  ? "RESOLVED"
+                  : "ACTIVE"}
               </div>
 
-              <div className="popup-detail">
-                <span>Sound Level</span>
-                <strong>{displaySoundLevel} dB</strong>
-              </div>
-
-              <div className="popup-detail">
-                <span>Threshold</span>
-                <strong>{alert.threshold} dB</strong>
-              </div>
-
-              <div className="popup-detail">
-                <span>Severity</span>
-                <strong className="critical-text">
-                  {alert.severity}
-                </strong>
-              </div>
-
-              <div className="popup-detail">
-                <span>State</span>
-                <strong
-                  className={
-                    isResolved
-                      ? "resolved-text"
-                      : isAcknowledged
-                      ? "acknowledged-text"
-                      : "critical-text"
-                  }
-                >
-                  {alertState.toUpperCase()}
-                </strong>
-              </div>
-
-              <div className="popup-detail">
-                <span>Detected At</span>
-                <strong>{alertTime}</strong>
-              </div>
-
-              {isAcknowledged || isResolved ? (
-                <div className="popup-detail">
-                  <span>Acknowledged At</span>
-                  <strong>{acknowledgedTime}</strong>
-                </div>
-              ) : null}
-
-              {isResolved ? (
-                <div className="popup-detail">
-                  <span>Resolved At</span>
-                  <strong>{resolvedTime}</strong>
-                </div>
-              ) : null}
+              <ChevronRight
+                size={19}
+                className="alert-chevron"
+              />
 
             </div>
+          );
+        })}
 
-            {/* ACTION */}
-            {isActive && (
-              <button
-                className="acknowledge-button"
-                onClick={handleAcknowledge}
-              >
-                Acknowledge Alert
-              </button>
-            )}
-
-            {isAcknowledged && (
-              <div className="acknowledged-message">
-                ✓ Alert Acknowledged
-              </div>
-            )}
-
-            {isResolved && (
-              <div className="resolved-message">
-                ✓ Alert Resolved
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-/* =========================================================
-   HISTORY
-========================================================= */
-
-function HistoryPage() {
-  const rows = [
-    [
-      "10:20 AM",
-      "42.6 dB",
-      "No Leak",
-      "Normal",
-    ],
-    [
-      "10:15 AM",
-      "45.2 dB",
-      "No Leak",
-      "Normal",
-    ],
-    [
-      "10:10 AM",
-      "40.8 dB",
-      "No Leak",
-      "Normal",
-    ],
-    [
-      "10:05 AM",
-      "43.1 dB",
-      "No Leak",
-      "Normal",
-    ],
-    [
-      "10:00 AM",
-      "41.7 dB",
-      "No Leak",
-      "Normal",
-    ],
-  ];
-
-  return (
-    <section>
-      <PageTitle
-        label="HISTORY"
-        title="Monitoring History"
-        description="Previous acoustic readings and leak detection events."
-      />
-
-      <div className="panel history-panel">
-        <div className="history-row history-header">
-          <span>Time</span>
-          <span>Sound Level</span>
-          <span>Detection</span>
-          <span>Status</span>
-        </div>
-
-        {rows.map((row, index) => (
-          <div
-            className="history-row"
-            key={index}
-          >
-            <span>{row[0]}</span>
-            <span>{row[1]}</span>
-            <span>{row[2]}</span>
-
-            <span className="green-text">
-              {row[3]}
-            </span>
-          </div>
-        ))}
       </div>
+
     </section>
   );
 }
 
 /* =========================================================
-   DEVICE
-========================================================= */
-
-function DevicePage({
-  soundLevel,
-  threshold,
-}) {
-  return (
-    <section>
-      <PageTitle
-        label="DEVICE CENTER"
-        title="Connected Hardware"
-        description="ESP32, sensor, Wi-Fi and Firebase connection information."
-      />
-
-      <div className="device-grid">
-        <DeviceCard
-          icon={<Cpu size={28} />}
-          title="ESP32"
-          subtitle="Main Controller"
-          details={[
-            ["Status", "Online"],
-            ["Connection", "Wi-Fi"],
-            ["Data Upload", "Active"],
-          ]}
-        />
-
-        <DeviceCard
-          icon={<Mic2 size={28} />}
-          title="INMP441"
-          subtitle="Digital Microphone Sensor"
-          details={[
-            ["Status", "Active"],
-            [
-              "Current Reading",
-              `${soundLevel} dB`,
-            ],
-            [
-              "Threshold",
-              `${threshold} dB`,
-            ],
-          ]}
-        />
-
-        <DeviceCard
-          icon={<Cloud size={28} />}
-          title="Firebase"
-          subtitle="Cloud Data Platform"
-          details={[
-            ["Status", "Connected"],
-            ["Sync", "Real-Time"],
-            ["Frontend", "React"],
-          ]}
-        />
-      </div>
-    </section>
-  );
-}
-
-/* =========================================================
-   REUSABLE SOUND METER
-========================================================= */
+   SOUND METER
+   ========================================================= */
 
 function SoundMeter({
   soundLevel,
+  threshold,
 }) {
+  const isLeak =
+    soundLevel >= threshold;
+
   return (
     <div className="panel sound-panel">
+
       <div className="panel-header">
+
         <div>
           <p className="small-title">
             LIVE ACOUSTIC LEVEL
@@ -1092,17 +820,21 @@ function SoundMeter({
         </div>
 
         <span className="live-text">
-          ● LIVE
+          <span></span>
+          LIVE
         </span>
+
       </div>
 
       <div className="sound-meter">
-        <div className="meter-ring meter-ring-1"></div>
-        <div className="meter-ring meter-ring-2"></div>
-        <div className="meter-ring meter-ring-3"></div>
+
+        <div className="meter-ring ring-1"></div>
+        <div className="meter-ring ring-2"></div>
+        <div className="meter-ring ring-3"></div>
 
         <div className="meter-center">
-          <Mic2 size={25} />
+
+          <Mic2 size={28} />
 
           <strong>
             {soundLevel}
@@ -1110,10 +842,20 @@ function SoundMeter({
 
           <span>dB</span>
 
-          <small>
-            NORMAL
+          <small
+            className={
+              isLeak
+                ? "meter-danger"
+                : ""
+            }
+          >
+            {isLeak
+              ? "LEAK"
+              : "NORMAL"}
           </small>
+
         </div>
+
       </div>
 
       <div className="meter-labels">
@@ -1122,17 +864,19 @@ function SoundMeter({
         <span>70</span>
         <span>100 dB</span>
       </div>
+
     </div>
   );
 }
 
 /* =========================================================
-   SOUND WAVE
-========================================================= */
+   WAVEFORM
+   ========================================================= */
 
 function SoundWave() {
   return (
     <div className="wave-container">
+
       <div className="horizontal-line line1"></div>
       <div className="horizontal-line line2"></div>
       <div className="horizontal-line line3"></div>
@@ -1146,6 +890,7 @@ function SoundWave() {
         preserveAspectRatio="none"
       >
         <defs>
+
           <linearGradient
             id="waveColor"
             x1="0%"
@@ -1166,6 +911,7 @@ function SoundWave() {
               stopColor="#8d72ff"
             />
           </linearGradient>
+
         </defs>
 
         <polyline
@@ -1203,6 +949,7 @@ function SoundWave() {
           strokeLinecap="round"
           strokeLinejoin="round"
         />
+
       </svg>
 
       <div className="wave-time">
@@ -1212,64 +959,413 @@ function SoundWave() {
         <span>-15s</span>
         <span>Now</span>
       </div>
+
     </div>
   );
 }
 
 /* =========================================================
+   LIVE MONITOR
+   ========================================================= */
+
+function LiveMonitor({
+  soundLevel,
+  threshold,
+}) {
+  return (
+    <section>
+
+      <section className="hero-grid">
+
+        
+
+        <div className="panel leak-panel">
+
+          <p className="small-title">
+            CURRENT ANALYSIS
+          </p>
+
+          <h3>
+            Detection Information
+          </h3>
+
+          <div className="info-list">
+
+            <InfoRow
+              label="Current Level"
+              value={`${soundLevel} dB`}
+            />
+
+            <InfoRow
+              label="Leak Threshold"
+              value={`${threshold} dB`}
+            />
+
+            <InfoRow
+              label="Status"
+              value={
+                soundLevel >= threshold
+                  ? "Leak Detected"
+                  : "Normal"
+              }
+              green={
+                soundLevel < threshold
+              }
+            />
+
+            <InfoRow
+              label="Sensor"
+              value="INMP441"
+            />
+
+          </div>
+
+        </div>
+
+      </section>
+
+      
+
+    </section>
+  );
+}
+
+/* =========================================================
+   ALERTS PAGE
+   ========================================================= */
+function AlertsPage({
+  alerts,
+  selectedAlert,
+  setSelectedAlert,
+  resolveAlert,
+}) {
+  const totalAlerts = alerts.length;
+  const activeAlerts = alerts.filter(
+    (alert) => alert.state === "active"
+  ).length;
+  const resolvedAlerts = alerts.filter(
+    (alert) => alert.state === "resolved"
+  ).length;
+
+  const formatCreatedAt = (value) => {
+    if (typeof value === "string") return value;
+    return new Date(value).toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  return (
+    <div className="alerts-page">
+      {/* PAGE HEADER */}
+      <div className="page-header">
+        
+
+        <div className="online-badge">
+          <span></span>
+          ESP32 Online
+        </div>
+      </div>
+
+      {/* STATISTICS */}
+      <div className="alert-stats">
+        <div className="alert-stat-card">
+          <span>Total</span>
+          <strong>{totalAlerts}</strong>
+        </div>
+
+        <div className="alert-stat-card active-stat">
+          <span>Active</span>
+          <strong>{activeAlerts}</strong>
+        </div>
+
+        <div className="alert-stat-card resolved-stat">
+          <span>Resolved</span>
+          <strong>{resolvedAlerts}</strong>
+        </div>
+      </div>
+
+      {/* ALERT LIST + DETAILS */}
+      <div className={`alerts-content ${selectedAlert ? "has-details" : ""}`}>
+        <div className="alerts-list">
+          {alerts.map((alert) => (
+            <div
+              key={alert.id}
+              onClick={() => setSelectedAlert(alert)}
+              className={`alert-card ${
+                selectedAlert?.id === alert.id ? "selected" : ""
+              } ${
+                alert.state === "active"
+                  ? "alert-active"
+                  : "alert-resolved"
+              }`}
+            >
+              <div className="alert-icon">
+                {alert.state === "active" ? "⚠" : "✓"}
+              </div>
+
+              <div className="alert-info">
+                <strong>
+                  {alert.node} — {alert.title}
+                </strong>
+                <span>{alert.description}</span>
+              </div>
+
+              <div className="alert-reading">
+                <strong>{alert.soundLevel.toFixed(1)} dB</strong>
+                <small>Sound Level</small>
+              </div>
+
+              <div
+                className={`status-badge ${
+                  alert.state === "active"
+                    ? "status-active"
+                    : "status-resolved"
+                }`}
+              >
+                ● {alert.state.toUpperCase()}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* DETAILS PANEL ONLY APPEARS AFTER CLICKING AN ALERT */}
+        {selectedAlert && (
+          <aside className="alert-details">
+            <div className="details-header">
+              <div>
+                <p className="small-title">ALERT DETAILS</p>
+                <h2>{selectedAlert.node}</h2>
+                <p>{selectedAlert.title}</p>
+              </div>
+
+              <button
+                type="button"
+                className="close-details"
+                onClick={() => setSelectedAlert(null)}
+                aria-label="Close alert details"
+              >
+                ×
+              </button>
+            </div>
+
+            <div
+              className={`details-status ${
+                selectedAlert.state === "active"
+                  ? "details-active"
+                  : "details-resolved"
+              }`}
+            >
+              <span>
+                {selectedAlert.state === "active" ? "⚠" : "✓"}
+              </span>
+              <div>
+                <strong>
+                  {selectedAlert.state === "active"
+                    ? "Active Alert"
+                    : "Alert Resolved"}
+                </strong>
+                <small>
+                  {selectedAlert.state === "active"
+                    ? "Requires attention"
+                    : "No action required"}
+                </small>
+              </div>
+            </div>
+
+            <div className="details-grid">
+              <div className="detail-item">
+                <span>Node</span>
+                <strong>{selectedAlert.node}</strong>
+              </div>
+
+              <div className="detail-item">
+                <span>Severity</span>
+                <strong>
+                  {selectedAlert.severity.charAt(0).toUpperCase() +
+                    selectedAlert.severity.slice(1)}
+                </strong>
+              </div>
+
+              <div className="detail-item">
+                <span>Sound Level</span>
+                <strong>{selectedAlert.soundLevel.toFixed(1)} dB</strong>
+              </div>
+
+              <div className="detail-item">
+                <span>Threshold</span>
+                <strong>{selectedAlert.threshold} dB</strong>
+              </div>
+
+              <div className="detail-item">
+                <span>Status</span>
+                <strong>
+                  {selectedAlert.state.charAt(0).toUpperCase() +
+                    selectedAlert.state.slice(1)}
+                </strong>
+              </div>
+
+              <div className="detail-item">
+                <span>Created</span>
+                <strong>{formatCreatedAt(selectedAlert.createdAt)}</strong>
+              </div>
+            </div>
+
+            <div className="detail-message">
+              <strong>Detection Information</strong>
+              <p>{selectedAlert.description}</p>
+            </div>
+
+            <div className="sound-level-detail">
+              <div className="detail-section-title">Sound Level</div>
+
+              <div className="sound-level-number">
+                {selectedAlert.soundLevel.toFixed(1)}
+                <span>dB</span>
+              </div>
+
+              <div className="sound-progress">
+                <div
+                  style={{
+                    width: `${Math.min(
+                      (selectedAlert.soundLevel / selectedAlert.threshold) * 100,
+                      100
+                    )}%`,
+                  }}
+                />
+              </div>
+
+              <div className="sound-scale">
+                <span>0 dB</span>
+                <span>Threshold {selectedAlert.threshold} dB</span>
+                <span>100+ dB</span>
+              </div>
+            </div>
+
+            {selectedAlert.state === "active" && (
+              <button
+                type="button"
+                className="resolve-alert-button"
+                onClick={() => resolveAlert(selectedAlert.id)}
+              >
+                ✓ Resolve Alert
+              </button>
+            )}
+          </aside>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   HISTORY
+   ========================================================= */
+
+function HistoryPage() {
+  const rows = [
+    ["10:20 AM", "42.6 dB", "No Leak", "Normal"],
+    ["10:15 AM", "45.2 dB", "No Leak", "Normal"],
+    ["10:10 AM", "40.8 dB", "No Leak", "Normal"],
+    ["10:05 AM", "43.1 dB", "No Leak", "Normal"],
+    ["10:00 AM", "41.7 dB", "No Leak", "Normal"],
+  ];
+
+  return (
+    <section>
+
+      <div className="panel history-panel">
+
+        <div className="history-row history-header">
+          <span>Time</span>
+          <span>Sound Level</span>
+          <span>Detection</span>
+          <span>Status</span>
+        </div>
+
+        {rows.map((row, index) => (
+          <div
+            className="history-row"
+            key={index}
+          >
+            <span>{row[0]}</span>
+            <span>{row[1]}</span>
+            <span>{row[2]}</span>
+            <span className="green-text">
+              {row[3]}
+            </span>
+          </div>
+        ))}
+
+      </div>
+
+    </section>
+  );
+}
+
+/* =========================================================
+   DEVICE
+   ========================================================= */
+
+function DevicePage({
+  soundLevel,
+  threshold,
+}) {
+  return (
+    <section>
+
+      <div className="device-grid">
+
+        <DeviceCard
+          icon={<Cpu size={27} />}
+          title="ESP32"
+          subtitle="Main Controller"
+          details={[
+            ["Status", "Online"],
+            ["Connection", "Wi-Fi"],
+            ["Data Upload", "Active"],
+          ]}
+        />
+
+        <DeviceCard
+          icon={<Mic2 size={27} />}
+          title="INMP441"
+          subtitle="Digital Microphone Sensor"
+          details={[
+            ["Status", "Active"],
+            [
+              "Current Reading",
+              `${soundLevel} dB`,
+            ],
+            [
+              "Threshold",
+              `${threshold} dB`,
+            ],
+          ]}
+        />
+
+        <DeviceCard
+          icon={<Cloud size={27} />}
+          title="Demo Data"
+          subtitle="Mock Data Source"
+          details={[
+            ["Status", "Active"],
+            ["Mode", "Hardcoded"],
+            ["Frontend", "React"],
+          ]}
+        />
+
+      </div>
+
+    </section>
+  );
+}
+
+/* =========================================================
    SMALL COMPONENTS
-========================================================= */
-
-function SystemMini({
-  icon,
-  name,
-  status,
-}) {
-  return (
-    <div className="system-mini">
-      <div className="system-mini-icon">
-        {icon}
-      </div>
-
-      <div>
-        <strong>
-          {name}
-        </strong>
-
-        <span>
-          <i></i>
-          {status}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function HealthItem({
-  icon,
-  name,
-  status,
-}) {
-  return (
-    <div className="health-item">
-      <div className="health-icon">
-        {icon}
-      </div>
-
-      <div>
-        <span>
-          {name}
-        </span>
-
-        <strong>
-          {status}
-        </strong>
-      </div>
-
-      <i></i>
-    </div>
-  );
-}
+   ========================================================= */
 
 function InfoRow({
   label,
@@ -1278,9 +1374,8 @@ function InfoRow({
 }) {
   return (
     <div className="info-row">
-      <span>
-        {label}
-      </span>
+
+      <span>{label}</span>
 
       <strong
         className={
@@ -1289,23 +1384,7 @@ function InfoRow({
       >
         {value}
       </strong>
-    </div>
-  );
-}
 
-function MetricCard({
-  title,
-  value,
-}) {
-  return (
-    <div className="panel metric-card">
-      <span>
-        {title}
-      </span>
-
-      <strong>
-        {value}
-      </strong>
     </div>
   );
 }
@@ -1318,55 +1397,31 @@ function DeviceCard({
 }) {
   return (
     <div className="panel device-card">
+
       <div className="device-main-icon">
         {icon}
       </div>
 
-      <h3>
-        {title}
-      </h3>
+      <h3>{title}</h3>
 
-      <p>
-        {subtitle}
-      </p>
+      <p>{subtitle}</p>
 
       <div className="device-details">
+
         {details.map(
           ([label, value]) => (
             <div key={label}>
-              <span>
-                {label}
-              </span>
 
-              <strong>
-                {value}
-              </strong>
+              <span>{label}</span>
+
+              <strong>{value}</strong>
+
             </div>
           )
         )}
+
       </div>
-    </div>
-  );
-}
 
-function PageTitle({
-  label,
-  title,
-  description,
-}) {
-  return (
-    <div className="page-title">
-      <p>
-        {label}
-      </p>
-
-      <h2>
-        {title}
-      </h2>
-
-      <span>
-        {description}
-      </span>
     </div>
   );
 }
