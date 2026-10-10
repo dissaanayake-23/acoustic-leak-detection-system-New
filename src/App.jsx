@@ -1,6 +1,5 @@
 import { useState } from "react";
 import "./App.css";
-import compressedAirImage from "./assets/compressed-air-system.jpg";
 
 import {
   LayoutDashboard,
@@ -195,11 +194,6 @@ function App() {
       icon: LayoutDashboard,
     },
     {
-      id: "live",
-      label: "Live Monitor",
-      icon: Activity,
-    },
-    {
       id: "alerts",
       label: "Alerts",
       icon: Bell,
@@ -209,7 +203,6 @@ function App() {
       label: "History",
       icon: History,
     },
-    
   ];
 
   /* =======================================================
@@ -297,31 +290,17 @@ function App() {
 
         {activePage === "dashboard" && (
           <>
-            <DashboardHero />
+            <SimplePageHeader
+              page="Dashboard"
+              title="Acoustic Leak Dashboard"
+              subtitle="Real-time monitoring across 12 connected detection nodes."
+            />
 
             <Dashboard
               soundLevel={soundLevel}
               threshold={threshold}
               alerts={alerts}
-            />
-          </>
-        )}
-
-        {/* =================================================
-            LIVE MONITOR
-        ================================================= */}
-
-        {activePage === "live" && (
-          <>
-            <SimplePageHeader
-              page="Live Monitor"
-              title="Real-Time Acoustic Monitoring"
-              subtitle="Continuous sound monitoring from the INMP441 microphone."
-            />
-
-            <LiveMonitor
-              soundLevel={soundLevel}
-              threshold={threshold}
+              resolveAlert={resolveAlert}
             />
           </>
         )}
@@ -387,54 +366,26 @@ function App() {
   );
 }
 
+
+
 /* =========================================================
-   DASHBOARD HERO
+   MOCK NODES DATA
    ========================================================= */
 
-function DashboardHero() {
-  return (
-    <section
-      className="dashboard-hero"
-      style={{
-        backgroundImage: `url(${compressedAirImage})`,
-      }}
-    >
-      <div className="dashboard-hero-overlay">
-
-        <div className="hero-top">
-
-          <div>
-            <p className="hero-breadcrumb">
-              Monitoring / Dashboard
-            </p>
-
-            <h1>Acoustic Leak Monitor</h1>
-
-            <p className="hero-project-name">
-              Compressed Air Leak Detection
-            </p>
-
-            <p className="hero-subtitle">
-              Real-Time Monitoring Dashboard
-            </p>
-          </div>
-
-          <div className="hero-online">
-            <span className="online-dot"></span>
-            <strong>ESP32 Online</strong>
-          </div>
-
-        </div>
-
-        <div className="hero-monitoring">
-          <span className="online-dot"></span>
-          System Monitoring
-        </div>
-
-      </div>
-    </section>
-  );
-}
+const NODES_DATA = [
+  { id: "Node 01", name: "Node 01" },
+  { id: "Node 02", name: "Node 02" },
+  { id: "Node 03", name: "Node 03" },
+  { id: "Node 04", name: "Node 04" },
+  { id: "Node 05", name: "Node 05" },
+  { id: "Node 06", name: "Node 06" },
+  { id: "Node 07", name: "Node 07" },
+  { id: "Node 08", name: "Node 08" },
+  { id: "Node 09", name: "Node 09" },
+  { id: "Node 10", name: "Node 10" },
+  { id: "Node 11", name: "Node 11" },
+  { id: "Node 12", name: "Node 12" },
+];
 
 /* =========================================================
    SIMPLE HEADER
@@ -460,11 +411,6 @@ function SimplePageHeader({
         </p>
       </div>
 
-      <div className="online-badge">
-        <span className="online-dot"></span>
-        ESP32 Online
-      </div>
-
     </header>
   );
 }
@@ -487,21 +433,6 @@ function Dashboard({
   const resolvedAlerts = alerts.filter(
     (alert) => alert.state === "resolved"
   ).length;
-
-  const criticalAlerts = alerts.filter(
-    (alert) => alert.severity === "critical"
-  ).length;
-
-  const risk = Math.round(
-    (soundLevel / threshold) * 100
-  );
-
-  const riskStatus =
-    soundLevel >= threshold
-      ? "CRITICAL"
-      : soundLevel >= threshold * 0.8
-      ? "WARNING"
-      : "NORMAL";
 
   return (
     <div className="dashboard">
@@ -535,119 +466,53 @@ function Dashboard({
           type="resolved"
         />
 
-        <SummaryCard
-          icon={<AlertTriangle size={21} />}
-          title="Critical Alerts"
-          value={criticalAlerts}
-          text="High severity events"
-          type="critical"
-        />
-
       </section>
 
       {/* =================================================
-          SOUND + LEAK
+          NODES SECTION
       ================================================= */}
 
-      <section className="hero-grid">
+      <section className="nodes-section">
 
-  <div className="panel leak-panel">
+        <div className="nodes-section-header">
+          <p className="small-title">MONITORING NODES</p>
+          <h3>Connected Detection Nodes</h3>
+          <p>Real-time leak status for all monitoring nodes across the system.</p>
+        </div>
 
-    <p className="small-title">
-      LEAK ANALYSIS
-    </p>
+        <div className="nodes-grid">
+          {NODES_DATA.map((node) => {
+            const hasLeak = alerts.some(
+              (a) => a.node === node.id && a.state === "active"
+            );
 
-          <h3>Leak Risk</h3>
+            return (
+              <div
+                key={node.id}
+                className={`node-card ${hasLeak ? "has-leak" : ""}`}
+              >
+                <div className="node-card-top">
+                  <div className="node-icon-box">
+                    <Cpu size={20} />
+                  </div>
 
-          <div className="risk-heading">
+                  <span
+                    className={`node-status-badge ${
+                      hasLeak ? "leak" : "normal"
+                    }`}
+                  >
+                    <span className="node-status-dot"></span>
+                    {hasLeak ? "LEAK DETECTED" : "NORMAL"}
+                  </span>
+                </div>
 
-            <strong
-              className={`risk-status ${riskStatus.toLowerCase()}`}
-            >
-              {riskStatus}
-            </strong>
-
-            <span>
-              {risk}% of threshold
-            </span>
-
-          </div>
-
-          <div className="risk-track">
-
-            <div
-              className={`risk-fill ${riskStatus.toLowerCase()}`}
-              style={{
-                width: `${Math.min(risk, 100)}%`,
-              }}
-            ></div>
-
-            <span className="risk-marker"></span>
-
-          </div>
-
-          <div className="risk-labels">
-            <span>Normal</span>
-            <span>Warning</span>
-            <span>Leak</span>
-          </div>
-
-          <div className="threshold-row">
-
-            <div>
-              <AlertTriangle size={18} />
-              <span>Leak Threshold</span>
-            </div>
-
-            <strong>
-              {threshold} dB
-            </strong>
-
-          </div>
-
-          <div
-            className={`detection-message ${
-              soundLevel >= threshold
-                ? "danger"
-                : ""
-            }`}
-          >
-
-            {soundLevel >= threshold ? (
-              <AlertTriangle size={22} />
-            ) : (
-              <ShieldCheck size={22} />
-            )}
-
-            <div>
-
-              <strong>
-                {soundLevel >= threshold
-                  ? "Leak Detected"
-                  : "No Leak Detected"}
-              </strong>
-
-              <span>
-                {soundLevel >= threshold
-                  ? "Sound level is above the threshold"
-                  : "System operating normally"}
-              </span>
-
-            </div>
-
-          </div>
-
+                <h4 className="node-title">{node.name}</h4>
+              </div>
+            );
+          })}
         </div>
 
       </section>
-
-      
-
-      {/* =================================================
-          RECENT ALERTS
-      ================================================= */}
-
-      <RecentAlerts alerts={alerts} />
 
     </div>
   );
@@ -685,113 +550,7 @@ function SummaryCard({
   );
 }
 
-/* =========================================================
-   RECENT ALERTS
-   ========================================================= */
 
-function RecentAlerts({ alerts }) {
-  return (
-    <section className="panel recent-alerts-panel">
-
-      <div className="panel-header">
-
-        <div>
-          <p className="small-title">
-            ALERTS
-          </p>
-
-          <h3>Recent Alerts</h3>
-
-          <span>
-            Latest activity from monitoring nodes
-          </span>
-        </div>
-
-        <Bell size={20} />
-
-      </div>
-
-      <div className="recent-alert-list">
-
-        {alerts.slice(0, 5).map((alert) => {
-
-          const resolved =
-            alert.state === "resolved";
-
-          return (
-            <div
-              key={alert.id}
-              className={`recent-alert ${
-                resolved
-                  ? "resolved"
-                  : "active"
-              }`}
-            >
-
-              <div className="recent-alert-icon">
-
-                {resolved ? (
-                  <ShieldCheck size={19} />
-                ) : (
-                  <AlertTriangle size={19} />
-                )}
-
-              </div>
-
-              <div className="recent-alert-info">
-
-                <strong>
-                  {alert.node} —{" "}
-                  {alert.severity === "critical"
-                    ? "Critical Air Leak"
-                    : "Air Leak Warning"}
-                </strong>
-
-                <span>
-                  Abnormal acoustic activity detected
-                </span>
-
-              </div>
-
-              <div className="recent-alert-reading">
-
-                <strong>
-                  {alert.soundLevel}
-                </strong>
-
-                <span>
-                  Sound Level
-                </span>
-
-              </div>
-
-              <div
-                className={`alert-status ${
-                  resolved
-                    ? "resolved-status"
-                    : "active-status"
-                }`}
-              >
-                <span></span>
-                {resolved
-                  ? "RESOLVED"
-                  : "ACTIVE"}
-              </div>
-
-              <ChevronRight
-                size={19}
-                className="alert-chevron"
-              />
-
-            </div>
-          );
-        })}
-
-      </div>
-
-    </section>
-  );
-}
 
 /* =========================================================
    SOUND METER
@@ -964,71 +723,7 @@ function SoundWave() {
   );
 }
 
-/* =========================================================
-   LIVE MONITOR
-   ========================================================= */
 
-function LiveMonitor({
-  soundLevel,
-  threshold,
-}) {
-  return (
-    <section>
-
-      <section className="hero-grid">
-
-        
-
-        <div className="panel leak-panel">
-
-          <p className="small-title">
-            CURRENT ANALYSIS
-          </p>
-
-          <h3>
-            Detection Information
-          </h3>
-
-          <div className="info-list">
-
-            <InfoRow
-              label="Current Level"
-              value={`${soundLevel} dB`}
-            />
-
-            <InfoRow
-              label="Leak Threshold"
-              value={`${threshold} dB`}
-            />
-
-            <InfoRow
-              label="Status"
-              value={
-                soundLevel >= threshold
-                  ? "Leak Detected"
-                  : "Normal"
-              }
-              green={
-                soundLevel < threshold
-              }
-            />
-
-            <InfoRow
-              label="Sensor"
-              value="INMP441"
-            />
-
-          </div>
-
-        </div>
-
-      </section>
-
-      
-
-    </section>
-  );
-}
 
 /* =========================================================
    ALERTS PAGE
@@ -1039,6 +734,8 @@ function AlertsPage({
   setSelectedAlert,
   resolveAlert,
 }) {
+  const [filterState, setFilterState] = useState("all");
+
   const totalAlerts = alerts.length;
   const activeAlerts = alerts.filter(
     (alert) => alert.state === "active"
@@ -1046,6 +743,12 @@ function AlertsPage({
   const resolvedAlerts = alerts.filter(
     (alert) => alert.state === "resolved"
   ).length;
+
+  const filteredAlerts = alerts.filter((alert) => {
+    if (filterState === "active") return alert.state === "active";
+    if (filterState === "resolved") return alert.state === "resolved";
+    return true;
+  });
 
   const formatCreatedAt = (value) => {
     if (typeof value === "string") return value;
@@ -1059,25 +762,16 @@ function AlertsPage({
 
   return (
     <div className="alerts-page">
-      {/* PAGE HEADER */}
-      <div className="page-header">
-        
-
-        <div className="online-badge">
-          <span></span>
-          ESP32 Online
-        </div>
-      </div>
 
       {/* STATISTICS */}
       <div className="alert-stats">
         <div className="alert-stat-card">
-          <span>Total</span>
+          <span>Total Alerts</span>
           <strong>{totalAlerts}</strong>
         </div>
 
         <div className="alert-stat-card active-stat">
-          <span>Active</span>
+          <span>Active Leaks</span>
           <strong>{activeAlerts}</strong>
         </div>
 
@@ -1087,10 +781,25 @@ function AlertsPage({
         </div>
       </div>
 
+      {/* TABS FILTER */}
+      <div className="history-filter-bar" style={{ marginBottom: "20px" }}>
+        <div className="filter-group">
+          <label>Show Alerts:</label>
+          <select
+            value={filterState}
+            onChange={(e) => setFilterState(e.target.value)}
+          >
+            <option value="all">All Alerts ({totalAlerts})</option>
+            <option value="active">Active Leaks ({activeAlerts})</option>
+            <option value="resolved">Resolved ({resolvedAlerts})</option>
+          </select>
+        </div>
+      </div>
+
       {/* ALERT LIST + DETAILS */}
       <div className={`alerts-content ${selectedAlert ? "has-details" : ""}`}>
         <div className="alerts-list">
-          {alerts.map((alert) => (
+          {filteredAlerts.map((alert) => (
             <div
               key={alert.id}
               onClick={() => setSelectedAlert(alert)}
@@ -1103,7 +812,7 @@ function AlertsPage({
               }`}
             >
               <div className="alert-icon">
-                {alert.state === "active" ? "⚠" : "✓"}
+                {alert.state === "active" ? <AlertTriangle size={18} /> : <ShieldCheck size={18} />}
               </div>
 
               <div className="alert-info">
@@ -1113,11 +822,6 @@ function AlertsPage({
                 <span>{alert.description}</span>
               </div>
 
-              <div className="alert-reading">
-                <strong>{alert.soundLevel.toFixed(1)} dB</strong>
-                <small>Sound Level</small>
-              </div>
-
               <div
                 className={`status-badge ${
                   alert.state === "active"
@@ -1125,7 +829,7 @@ function AlertsPage({
                     : "status-resolved"
                 }`}
               >
-                ● {alert.state.toUpperCase()}
+                ● {alert.state === "active" ? "LEAK DETECTED" : "RESOLVED"}
               </div>
             </div>
           ))}
@@ -1190,16 +894,6 @@ function AlertsPage({
               </div>
 
               <div className="detail-item">
-                <span>Sound Level</span>
-                <strong>{selectedAlert.soundLevel.toFixed(1)} dB</strong>
-              </div>
-
-              <div className="detail-item">
-                <span>Threshold</span>
-                <strong>{selectedAlert.threshold} dB</strong>
-              </div>
-
-              <div className="detail-item">
                 <span>Status</span>
                 <strong>
                   {selectedAlert.state.charAt(0).toUpperCase() +
@@ -1218,32 +912,6 @@ function AlertsPage({
               <p>{selectedAlert.description}</p>
             </div>
 
-            <div className="sound-level-detail">
-              <div className="detail-section-title">Sound Level</div>
-
-              <div className="sound-level-number">
-                {selectedAlert.soundLevel.toFixed(1)}
-                <span>dB</span>
-              </div>
-
-              <div className="sound-progress">
-                <div
-                  style={{
-                    width: `${Math.min(
-                      (selectedAlert.soundLevel / selectedAlert.threshold) * 100,
-                      100
-                    )}%`,
-                  }}
-                />
-              </div>
-
-              <div className="sound-scale">
-                <span>0 dB</span>
-                <span>Threshold {selectedAlert.threshold} dB</span>
-                <span>100+ dB</span>
-              </div>
-            </div>
-
             {selectedAlert.state === "active" && (
               <button
                 type="button"
@@ -1260,44 +928,105 @@ function AlertsPage({
   );
 }
 
-/* =========================================================
-   HISTORY
-   ========================================================= */
+const MOCK_HISTORY = [
+  { id: "h001", time: "Today, 01:05 PM", node: "Node 03", event: "Leak Event Detected", status: "leak" },
+  { id: "h002", time: "Today, 12:58 PM", node: "Node 02", event: "Leak Event Detected", status: "leak" },
+  { id: "h003", time: "Today, 12:45 PM", node: "Node 05", event: "Leak Event Detected", status: "leak" },
+  { id: "h004", time: "Today, 12:32 PM", node: "Node 04", event: "Leak Alert Resolved", status: "normal" },
+  { id: "h005", time: "Today, 12:20 PM", node: "Node 01", event: "Leak Alert Resolved", status: "normal" },
+  { id: "h006", time: "Today, 11:45 AM", node: "Node 08", event: "Routine Operational Scan", status: "normal" },
+  { id: "h007", time: "Today, 11:10 AM", node: "Node 12", event: "Routine Operational Scan", status: "normal" },
+  { id: "h008", time: "Today, 10:30 AM", node: "Node 06", event: "Routine Operational Scan", status: "normal" },
+  { id: "h009", time: "Today, 09:50 AM", node: "Node 07", event: "Routine Operational Scan", status: "normal" },
+  { id: "h010", time: "Today, 09:15 AM", node: "Node 09", event: "Routine Operational Scan", status: "normal" },
+  { id: "h011", time: "Yesterday, 05:20 PM", node: "Node 10", event: "Routine Operational Scan", status: "normal" },
+  { id: "h012", time: "Yesterday, 04:10 PM", node: "Node 11", event: "Routine Operational Scan", status: "normal" },
+];
 
 function HistoryPage() {
-  const rows = [
-    ["10:20 AM", "42.6 dB", "No Leak", "Normal"],
-    ["10:15 AM", "45.2 dB", "No Leak", "Normal"],
-    ["10:10 AM", "40.8 dB", "No Leak", "Normal"],
-    ["10:05 AM", "43.1 dB", "No Leak", "Normal"],
-    ["10:00 AM", "41.7 dB", "No Leak", "Normal"],
-  ];
+  const [filterNode, setFilterNode] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  const filteredRows = MOCK_HISTORY.filter((item) => {
+    if (filterNode !== "all" && item.node !== filterNode) return false;
+    if (filterStatus !== "all" && item.status !== filterStatus) return false;
+    return true;
+  });
 
   return (
-    <section>
+    <section className="history-section">
 
+      {/* FILTER BAR */}
+      <div className="history-filter-bar">
+        <div className="filter-group">
+          <label htmlFor="history-node-filter">Filter by Node:</label>
+          <select
+            id="history-node-filter"
+            value={filterNode}
+            onChange={(e) => setFilterNode(e.target.value)}
+          >
+            <option value="all">All Nodes</option>
+            {NODES_DATA.map((node) => (
+              <option key={node.id} value={node.id}>
+                {node.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <label htmlFor="history-status-filter">Filter by Status:</label>
+          <select
+            id="history-status-filter"
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+          >
+            <option value="all">All Statuses</option>
+            <option value="leak">Leak Detected</option>
+            <option value="normal">Normal</option>
+          </select>
+        </div>
+      </div>
+
+      {/* TABLE PANEL */}
       <div className="panel history-panel">
 
         <div className="history-row history-header">
-          <span>Time</span>
-          <span>Sound Level</span>
-          <span>Detection</span>
+          <span>Timestamp</span>
+          <span>Node</span>
+          <span>Event / Activity</span>
           <span>Status</span>
         </div>
 
-        {rows.map((row, index) => (
-          <div
-            className="history-row"
-            key={index}
-          >
-            <span>{row[0]}</span>
-            <span>{row[1]}</span>
-            <span>{row[2]}</span>
-            <span className="green-text">
-              {row[3]}
-            </span>
+        {filteredRows.length > 0 ? (
+          filteredRows.map((row) => {
+            const isLeak = row.status === "leak";
+            return (
+              <div className="history-row" key={row.id}>
+                <span className="history-time">{row.time}</span>
+                <span className="history-node-badge">
+                  <Cpu size={14} />
+                  <strong>{row.node}</strong>
+                </span>
+                <span className="history-event">{row.event}</span>
+                <span>
+                  <span
+                    className={`node-status-badge ${
+                      isLeak ? "leak" : "normal"
+                    }`}
+                  >
+                    <span className="node-status-dot"></span>
+                    {isLeak ? "LEAK DETECTED" : "NORMAL"}
+                  </span>
+                </span>
+              </div>
+            );
+          })
+        ) : (
+          <div className="history-empty">
+            <p>No history records match the selected filters.</p>
           </div>
-        ))}
+        )}
 
       </div>
 
@@ -1309,10 +1038,7 @@ function HistoryPage() {
    DEVICE
    ========================================================= */
 
-function DevicePage({
-  soundLevel,
-  threshold,
-}) {
+function DevicePage() {
   return (
     <section>
 
@@ -1320,40 +1046,37 @@ function DevicePage({
 
         <DeviceCard
           icon={<Cpu size={27} />}
-          title="ESP32"
-          subtitle="Main Controller"
+          title="ESP32 Microcontroller"
+          subtitle="Main Processing & Wireless Unit"
           details={[
-            ["Status", "Online"],
-            ["Connection", "Wi-Fi"],
-            ["Data Upload", "Active"],
+            ["Hardware Status", "Online & Operational"],
+            ["System Uptime", "99.98%"],
+            ["Firmware", "v2.4.1 Stable"],
+            ["Wi-Fi Connectivity", "Connected (-58 dBm)"],
           ]}
         />
 
         <DeviceCard
           icon={<Mic2 size={27} />}
-          title="INMP441"
-          subtitle="Digital Microphone Sensor"
+          title="INMP441 Sensor Array"
+          subtitle="Digital Acoustic Microphones"
           details={[
-            ["Status", "Active"],
-            [
-              "Current Reading",
-              `${soundLevel} dB`,
-            ],
-            [
-              "Threshold",
-              `${threshold} dB`,
-            ],
+            ["Sensor Status", "Active Sampling"],
+            ["Sampling Frequency", "44.1 kHz"],
+            ["Audio Interface", "I2S Digital Signal"],
+            ["Array Sensitivity", "Omnidirectional"],
           ]}
         />
 
         <DeviceCard
           icon={<Cloud size={27} />}
-          title="Demo Data"
-          subtitle="Mock Data Source"
+          title="System Gateway"
+          subtitle="Real-time Data Pipeline"
           details={[
-            ["Status", "Active"],
-            ["Mode", "Hardcoded"],
-            ["Frontend", "React"],
+            ["Gateway Status", "Connected"],
+            ["Protocol", "MQTT / WebSockets"],
+            ["Cloud Sync", "Active"],
+            ["Encryption", "TLS 1.3 Secure"],
           ]}
         />
 
