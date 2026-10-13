@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { io } from "socket.io-client";
 import "./App.css";
 
 import {
@@ -7,185 +8,52 @@ import {
   Bell,
   History,
   Cpu,
-  Mic2,
-  Cloud,
   ShieldCheck,
   AlertTriangle,
-  Wifi,
-  ChevronRight,
 } from "lucide-react";
 
-
-const mockAlerts = [
-  {
-    id: "alert003",
-    node: "Node 03",
-    title: "Critical Air Leak",
-    severity: "critical",
-    soundLevel: 88.2,
-    threshold: 70,
-    state: "active",
-    createdAt: "Today, 01:05 PM",
-    description: "Abnormal acoustic activity detected",
-  },
-  {
-    id: "alert002",
-    node: "Node 02",
-    title: "Air Leak Warning",
-    severity: "warning",
-    soundLevel: 76.4,
-    threshold: 70,
-    state: "resolved",
-    createdAt: "Today, 12:58 PM",
-    description: "Sound level exceeded the warning threshold",
-  },
-  {
-    id: "alert005",
-    node: "Node 05",
-    title: "Critical Air Leak",
-    severity: "critical",
-    soundLevel: 91.7,
-    threshold: 70,
-    state: "active",
-    createdAt: "Today, 12:45 PM",
-    description: "High acoustic activity detected",
-  },
-  {
-    id: "alert004",
-    node: "Node 04",
-    title: "Air Leak Warning",
-    severity: "warning",
-    soundLevel: 73.1,
-    threshold: 70,
-    state: "resolved",
-    createdAt: "Today, 12:32 PM",
-    description: "Sound level slightly exceeded threshold",
-  },
-  {
-    id: "alert001",
-    node: "Node 01",
-    title: "Critical Air Leak",
-    severity: "critical",
-    soundLevel: 84.6,
-    threshold: 70,
-    state: "resolved",
-    createdAt: "Today, 12:20 PM",
-    description: "Abnormal acoustic activity detected",
-  },
-];
+const DEFAULT_NODES = Array.from({ length: 12 }, (_, i) => {
+  const id = `Node ${String(i + 1).padStart(2, "0")}`;
+  return { id, name: id, status: "normal" };
+});
 
 /* =========================================================
-   MOCK SENSOR DATA
-   ========================================================= */
-
-const SENSOR_DATA = {
-  soundLevel: 88.2,
-  threshold: 70,
-  status: "critical",
-  leakDetected: true,
-};
-
-/* =========================================================
-   MOCK ALERT DATA
-   ========================================================= */
-
-const INITIAL_ALERTS = [
-  {
-    id: "alert008",
-    node: "Node 03",
-    severity: "critical",
-    soundLevel: 88.2,
-    threshold: 70,
-    state: "active",
-    createdAt: Date.now() - 2 * 60 * 1000,
-  },
-  {
-    id: "alert007",
-    node: "Node 02",
-    severity: "warning",
-    soundLevel: 76.4,
-    threshold: 70,
-    state: "active",
-    createdAt: Date.now() - 5 * 60 * 1000,
-  },
-  {
-    id: "alert006",
-    node: "Node 05",
-    severity: "critical",
-    soundLevel: 91.7,
-    threshold: 70,
-    state: "active",
-    createdAt: Date.now() - 9 * 60 * 1000,
-  },
-  {
-    id: "alert005",
-    node: "Node 04",
-    severity: "warning",
-    soundLevel: 73.1,
-    threshold: 70,
-    state: "resolved",
-    createdAt: Date.now() - 16 * 60 * 1000,
-  },
-  {
-    id: "alert004",
-    node: "Node 01",
-    severity: "critical",
-    soundLevel: 84.6,
-    threshold: 70,
-    state: "resolved",
-    createdAt: Date.now() - 25 * 60 * 1000,
-  },
-  {
-    id: "alert003",
-    node: "Node 03",
-    severity: "critical",
-    soundLevel: 88.2,
-    threshold: 70,
-    state: "resolved",
-    createdAt: Date.now() - 40 * 60 * 1000,
-  },
-  {
-    id: "alert002",
-    node: "Node 02",
-    severity: "warning",
-    soundLevel: 74.5,
-    threshold: 70,
-    state: "resolved",
-    createdAt: Date.now() - 55 * 60 * 1000,
-  },
-  {
-    id: "alert001",
-    node: "Node 01",
-    severity: "critical",
-    soundLevel: 82.6,
-    threshold: 70,
-    state: "resolved",
-    createdAt: Date.now() - 75 * 60 * 1000,
-  },
-];
-
-/* =========================================================
-   APP
+   MAIN APPLICATION
    ========================================================= */
 
 function App() {
   const [activePage, setActivePage] = useState("dashboard");
-  const [alerts, setAlerts] = useState(INITIAL_ALERTS);
 
-  const soundLevel = SENSOR_DATA.soundLevel;
-  const threshold = SENSOR_DATA.threshold;
+  // Load from instant local cache if available, so refresh has ZERO delay
+  const [alerts, setAlerts] = useState(() => {
+    try {
+      const saved = localStorage.getItem("cached_alerts");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
-  const activeAlerts = alerts.filter(
-    (alert) => alert.state === "active"
-  );
+  const [nodes, setNodes] = useState(() => {
+    try {
+      const saved = localStorage.getItem("cached_nodes");
+      return saved ? JSON.parse(saved) : DEFAULT_NODES;
+    } catch {
+      return DEFAULT_NODES;
+    }
+  });
 
-  const resolvedAlerts = alerts.filter(
-    (alert) => alert.state === "resolved"
-  );
-
-  const totalAlerts = alerts.length;
-
+  const [soundLevel, setSoundLevel] = useState(42.0);
+  const [threshold, setThreshold] = useState(70);
+  const [leakDetected, setLeakDetected] = useState(false);
+  const [backendStatus, setBackendStatus] = useState("connected");
+  const [historyRecords, setHistoryRecords] = useState([]);
   const [selectedAlert, setSelectedAlert] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const activeAlerts = alerts.filter((alert) => alert.state === "active");
+  const resolvedAlerts = alerts.filter((alert) => alert.state === "resolved");
+  const totalAlerts = alerts.length;
 
   const navItems = [
     {
@@ -206,20 +74,130 @@ function App() {
   ];
 
   /* =======================================================
-     RESOLVE ALERT
+     FETCH DATABASE DATA & CONNECT WEBSOCKET
      ======================================================= */
+  useEffect(() => {
+    const API_BASE = import.meta.env.VITE_API_URL || "";
 
-  function resolveAlert(id) {
+    const fetchDatabaseData = async () => {
+      try {
+        const [sensorRes, nodesRes, alertsRes, histRes] = await Promise.all([
+          fetch(`${API_BASE}/api/sensor/latest`).then((r) => r.json()),
+          fetch(`${API_BASE}/api/nodes`).then((r) => r.json()),
+          fetch(`${API_BASE}/api/alerts`).then((r) => r.json()),
+          fetch(`${API_BASE}/api/history`).then((r) => r.json()),
+        ]);
+
+        if (sensorRes?.sensor) {
+          setSoundLevel(sensorRes.sensor.soundLevel);
+          setThreshold(sensorRes.sensor.threshold);
+          setLeakDetected(sensorRes.sensor.leakDetected);
+        }
+        if (Array.isArray(nodesRes) && nodesRes.length > 0) {
+          setNodes(nodesRes);
+          try { localStorage.setItem("cached_nodes", JSON.stringify(nodesRes)); } catch {}
+        }
+        if (Array.isArray(alertsRes)) {
+          setAlerts(alertsRes);
+          try { localStorage.setItem("cached_alerts", JSON.stringify(alertsRes)); } catch {}
+        }
+        if (Array.isArray(histRes)) {
+          setHistoryRecords(histRes);
+        }
+        setBackendStatus("connected");
+        setLoading(false);
+      } catch (err) {
+        console.warn("Could not reach backend API:", err);
+        setBackendStatus("offline");
+        setLoading(false);
+      }
+    };
+
+    fetchDatabaseData();
+
+    // Setup Socket.io real-time streaming
+    const socket = io(API_BASE || undefined, {
+      transports: ["websocket", "polling"],
+      reconnectionAttempts: 10,
+    });
+
+    socket.on("connect", () => {
+      console.log("⚡ [WebSocket] Connected to Real-Time Leak Detection Server");
+      setBackendStatus("connected");
+    });
+
+    socket.on("disconnect", () => {
+      console.log("⚠️ [WebSocket] Disconnected from server");
+      setBackendStatus("connecting");
+    });
+
+    socket.on("sensor:update", (data) => {
+      if (data.soundLevel !== undefined) setSoundLevel(data.soundLevel);
+      if (data.threshold !== undefined) setThreshold(data.threshold);
+      if (data.leakDetected !== undefined) setLeakDetected(data.leakDetected);
+    });
+
+    socket.on("alert:new", (newAlert) => {
+      setAlerts((currentAlerts) => [
+        newAlert,
+        ...currentAlerts.filter((a) => a.id !== newAlert.id),
+      ]);
+    });
+
+    socket.on("alert:resolved", (resolvedAlert) => {
+      setAlerts((currentAlerts) =>
+        currentAlerts.map((alert) =>
+          alert.id === resolvedAlert.id
+            ? { ...alert, state: "resolved", resolvedAt: resolvedAlert.resolvedAt }
+            : alert
+        )
+      );
+    });
+
+    socket.on("node:status", (updatedNode) => {
+      setNodes((currentNodes) =>
+        currentNodes.map((n) =>
+          n.id === updatedNode.id ? { ...n, ...updatedNode } : n
+        )
+      );
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  /* =======================================================
+     RESOLVE ALERT (PERSISTS TO RAILWAY POSTGRESQL)
+     ======================================================= */
+  async function resolveAlert(id) {
+    const API_BASE = import.meta.env.VITE_API_URL || "";
+
+    // Optimistic UI update
     setAlerts((currentAlerts) =>
       currentAlerts.map((alert) =>
-        alert.id === id
-          ? {
-              ...alert,
-              state: "resolved",
-            }
-          : alert
+        alert.id === id ? { ...alert, state: "resolved" } : alert
       )
     );
+
+    if (selectedAlert?.id === id) {
+      setSelectedAlert((prev) => (prev ? { ...prev, state: "resolved" } : null));
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/alerts/${id}/resolve`, {
+        method: "PATCH",
+      });
+      if (response.ok) {
+        // Refresh history from DB to reflect resolution record
+        const histRes = await fetch(`${API_BASE}/api/history`).then((r) => r.json());
+        if (Array.isArray(histRes)) {
+          setHistoryRecords(histRes);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to resolve alert on backend:", err);
+    }
   }
 
   return (
@@ -264,22 +242,54 @@ function App() {
 
                 <span>{item.label}</span>
 
-                {item.id === "alerts" &&
-                  activeAlerts.length > 0 && (
-                    <span className="alert-number">
-                      {activeAlerts.length}
-                    </span>
-                  )}
+                {item.id === "alerts" && activeAlerts.length > 0 && (
+                  <span className="alert-number">
+                    {activeAlerts.length}
+                  </span>
+                )}
               </button>
             );
           })}
 
         </nav>
 
+        {/* BACKEND CONNECTION BADGE */}
+        <div style={{ marginTop: "auto", padding: "16px 20px" }}>
+          <div
+            style={{
+              padding: "10px 14px",
+              borderRadius: "10px",
+              background: backendStatus === "connected" ? "#ecfdf5" : "#fffbeb",
+              border: backendStatus === "connected" ? "1px solid #a7f3d0" : "1px solid #fde68a",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+            }}
+          >
+            <span
+              style={{
+                width: "9px",
+                height: "9px",
+                borderRadius: "50%",
+                backgroundColor: backendStatus === "connected" ? "#10b981" : "#f59e0b",
+                boxShadow: backendStatus === "connected" ? "0 0 8px #10b981" : "none",
+              }}
+            />
+            <div style={{ lineHeight: 1.2 }}>
+              <div style={{ fontSize: "12px", fontWeight: "700", color: backendStatus === "connected" ? "#065f46" : "#92400e" }}>
+                {backendStatus === "connected" ? "Backend Online" : "Connecting..."}
+              </div>
+              <div style={{ fontSize: "11px", color: backendStatus === "connected" ? "#047857" : "#b45309" }}>
+                {backendStatus === "connected" ? "Railway & Sockets Active" : "Reconnecting to Server"}
+              </div>
+            </div>
+          </div>
+        </div>
+
       </aside>
 
       {/* ===================================================
-          MAIN
+          MAIN CONTENT AREA
       =================================================== */}
 
       <main className="main-content">
@@ -294,13 +304,13 @@ function App() {
               page="Dashboard"
               title="Acoustic Leak Dashboard"
               subtitle="Real-time monitoring across 12 connected detection nodes."
+              backendStatus={backendStatus}
             />
 
             <Dashboard
-              soundLevel={soundLevel}
-              threshold={threshold}
               alerts={alerts}
-              resolveAlert={resolveAlert}
+              nodes={nodes}
+              loading={loading}
             />
           </>
         )}
@@ -315,6 +325,7 @@ function App() {
               page="Alerts"
               title="Leak Alerts"
               subtitle="Monitor active and resolved acoustic leak events."
+              backendStatus={backendStatus}
             />
 
             <AlertsPage
@@ -322,6 +333,7 @@ function App() {
               selectedAlert={selectedAlert}
               setSelectedAlert={setSelectedAlert}
               resolveAlert={resolveAlert}
+              loading={loading}
             />
           </>
         )}
@@ -336,27 +348,12 @@ function App() {
               page="History"
               title="Monitoring History"
               subtitle="Previous acoustic readings and detection events."
+              backendStatus={backendStatus}
             />
 
-            <HistoryPage />
-          </>
-        )}
-
-        {/* =================================================
-            DEVICE
-        ================================================= */}
-
-        {activePage === "device" && (
-          <>
-            <SimplePageHeader
-              page="Device"
-              title="Connected Hardware"
-              subtitle="ESP32 and INMP441 monitoring components."
-            />
-
-            <DevicePage
-              soundLevel={soundLevel}
-              threshold={threshold}
+            <HistoryPage
+              historyRecords={historyRecords}
+              nodes={nodes}
             />
           </>
         )}
@@ -366,35 +363,15 @@ function App() {
   );
 }
 
-
-
 /* =========================================================
-   MOCK NODES DATA
-   ========================================================= */
-
-const NODES_DATA = [
-  { id: "Node 01", name: "Node 01" },
-  { id: "Node 02", name: "Node 02" },
-  { id: "Node 03", name: "Node 03" },
-  { id: "Node 04", name: "Node 04" },
-  { id: "Node 05", name: "Node 05" },
-  { id: "Node 06", name: "Node 06" },
-  { id: "Node 07", name: "Node 07" },
-  { id: "Node 08", name: "Node 08" },
-  { id: "Node 09", name: "Node 09" },
-  { id: "Node 10", name: "Node 10" },
-  { id: "Node 11", name: "Node 11" },
-  { id: "Node 12", name: "Node 12" },
-];
-
-/* =========================================================
-   SIMPLE HEADER
+   HEADER COMPONENT
    ========================================================= */
 
 function SimplePageHeader({
   page,
   title,
   subtitle,
+  backendStatus = "connected",
 }) {
   return (
     <header className="topbar">
@@ -411,34 +388,55 @@ function SimplePageHeader({
         </p>
       </div>
 
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "6px 14px",
+            borderRadius: "20px",
+            fontSize: "12px",
+            fontWeight: "600",
+            background: backendStatus === "connected" ? "rgba(46, 204, 113, 0.12)" : "rgba(245, 158, 11, 0.12)",
+            color: backendStatus === "connected" ? "#27ae60" : "#d97706",
+            border: backendStatus === "connected" ? "1px solid rgba(46, 204, 113, 0.3)" : "1px solid rgba(245, 158, 11, 0.3)",
+          }}
+        >
+          <span
+            style={{
+              width: "8px",
+              height: "8px",
+              borderRadius: "50%",
+              backgroundColor: backendStatus === "connected" ? "#2ecc71" : "#f59e0b",
+              boxShadow: backendStatus === "connected" ? "0 0 8px #2ecc71" : "none",
+            }}
+          />
+          {backendStatus === "connected" ? "PostgreSQL & Live Socket" : "Offline / Reconnecting"}
+        </span>
+      </div>
+
     </header>
   );
 }
 
 /* =========================================================
-   DASHBOARD
+   DASHBOARD COMPONENT
    ========================================================= */
 
 function Dashboard({
-  soundLevel,
-  threshold,
   alerts,
+  nodes = [],
 }) {
   const totalAlerts = alerts.length;
-
-  const activeAlerts = alerts.filter(
-    (alert) => alert.state === "active"
-  ).length;
-
-  const resolvedAlerts = alerts.filter(
-    (alert) => alert.state === "resolved"
-  ).length;
+  const activeAlerts = alerts.filter((alert) => alert.state === "active").length;
+  const resolvedAlerts = alerts.filter((alert) => alert.state === "resolved").length;
 
   return (
     <div className="dashboard">
 
       {/* =================================================
-          SUMMARY
+          SUMMARY STATISTICS
       ================================================= */}
 
       <section className="summary-grid">
@@ -447,7 +445,7 @@ function Dashboard({
           icon={<Bell size={21} />}
           title="Total Alerts"
           value={totalAlerts}
-          text="Recorded events"
+          text="Recorded events in PostgreSQL"
         />
 
         <SummaryCard
@@ -462,14 +460,14 @@ function Dashboard({
           icon={<ShieldCheck size={21} />}
           title="Resolved Alerts"
           value={resolvedAlerts}
-          text="Issues cleared"
+          text="Issues cleared in PostgreSQL"
           type="resolved"
         />
 
       </section>
 
       {/* =================================================
-          NODES SECTION
+          CONNECTED NODES GRID (FROM DATABASE)
       ================================================= */}
 
       <section className="nodes-section">
@@ -481,10 +479,10 @@ function Dashboard({
         </div>
 
         <div className="nodes-grid">
-          {NODES_DATA.map((node) => {
-            const hasLeak = alerts.some(
-              (a) => a.node === node.id && a.state === "active"
-            );
+          {nodes.map((node) => {
+            const hasLeak =
+              alerts.some((a) => a.node === node.id && a.state === "active") ||
+              node.status === "leak";
 
             return (
               <div
@@ -506,7 +504,14 @@ function Dashboard({
                   </span>
                 </div>
 
-                <h4 className="node-title">{node.name}</h4>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <h4 className="node-title">{node.name}</h4>
+                  {node.soundLevel !== undefined && (
+                    <span style={{ fontSize: "13px", color: hasLeak ? "#ef4444" : "#64748b", fontWeight: "600" }}>
+                      {node.soundLevel} dB
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -531,218 +536,35 @@ function SummaryCard({
 }) {
   return (
     <div className={`summary-card ${type}`}>
-
       <div className="summary-icon">
         {icon}
       </div>
 
       <div className="summary-content">
-
         <span>{title}</span>
-
         <strong>{value}</strong>
-
         <small>{text}</small>
-
       </div>
-
     </div>
   );
 }
-
-
-
-/* =========================================================
-   SOUND METER
-   ========================================================= */
-
-function SoundMeter({
-  soundLevel,
-  threshold,
-}) {
-  const isLeak =
-    soundLevel >= threshold;
-
-  return (
-    <div className="panel sound-panel">
-
-      <div className="panel-header">
-
-        <div>
-          <p className="small-title">
-            LIVE ACOUSTIC LEVEL
-          </p>
-
-          <h3>
-            Current Sound Reading
-          </h3>
-        </div>
-
-        <span className="live-text">
-          <span></span>
-          LIVE
-        </span>
-
-      </div>
-
-      <div className="sound-meter">
-
-        <div className="meter-ring ring-1"></div>
-        <div className="meter-ring ring-2"></div>
-        <div className="meter-ring ring-3"></div>
-
-        <div className="meter-center">
-
-          <Mic2 size={28} />
-
-          <strong>
-            {soundLevel}
-          </strong>
-
-          <span>dB</span>
-
-          <small
-            className={
-              isLeak
-                ? "meter-danger"
-                : ""
-            }
-          >
-            {isLeak
-              ? "LEAK"
-              : "NORMAL"}
-          </small>
-
-        </div>
-
-      </div>
-
-      <div className="meter-labels">
-        <span>0</span>
-        <span>50</span>
-        <span>70</span>
-        <span>100 dB</span>
-      </div>
-
-    </div>
-  );
-}
-
-/* =========================================================
-   WAVEFORM
-   ========================================================= */
-
-function SoundWave() {
-  return (
-    <div className="wave-container">
-
-      <div className="horizontal-line line1"></div>
-      <div className="horizontal-line line2"></div>
-      <div className="horizontal-line line3"></div>
-      <div className="horizontal-line line4"></div>
-
-      <div className="threshold-line"></div>
-
-      <svg
-        className="wave-svg"
-        viewBox="0 0 1000 250"
-        preserveAspectRatio="none"
-      >
-        <defs>
-
-          <linearGradient
-            id="waveColor"
-            x1="0%"
-            x2="100%"
-          >
-            <stop
-              offset="0%"
-              stopColor="#756dff"
-            />
-
-            <stop
-              offset="50%"
-              stopColor="#55b5ff"
-            />
-
-            <stop
-              offset="100%"
-              stopColor="#8d72ff"
-            />
-          </linearGradient>
-
-        </defs>
-
-        <polyline
-          points="
-          0,165
-          40,150
-          80,172
-          120,138
-          160,158
-          200,130
-          240,160
-          280,118
-          320,150
-          360,132
-          400,164
-          440,126
-          480,148
-          520,120
-          560,155
-          600,132
-          640,158
-          680,117
-          720,147
-          760,128
-          800,153
-          840,114
-          880,142
-          920,124
-          960,150
-          1000,130
-          "
-          fill="none"
-          stroke="url(#waveColor)"
-          strokeWidth="4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-      </svg>
-
-      <div className="wave-time">
-        <span>-60s</span>
-        <span>-45s</span>
-        <span>-30s</span>
-        <span>-15s</span>
-        <span>Now</span>
-      </div>
-
-    </div>
-  );
-}
-
-
 
 /* =========================================================
    ALERTS PAGE
    ========================================================= */
+
 function AlertsPage({
   alerts,
   selectedAlert,
   setSelectedAlert,
   resolveAlert,
+  loading = false,
 }) {
   const [filterState, setFilterState] = useState("all");
 
   const totalAlerts = alerts.length;
-  const activeAlerts = alerts.filter(
-    (alert) => alert.state === "active"
-  ).length;
-  const resolvedAlerts = alerts.filter(
-    (alert) => alert.state === "resolved"
-  ).length;
+  const activeAlerts = alerts.filter((alert) => alert.state === "active").length;
+  const resolvedAlerts = alerts.filter((alert) => alert.state === "resolved").length;
 
   const filteredAlerts = alerts.filter((alert) => {
     if (filterState === "active") return alert.state === "active";
@@ -751,7 +573,8 @@ function AlertsPage({
   });
 
   const formatCreatedAt = (value) => {
-    if (typeof value === "string") return value;
+    if (!value) return "Just now";
+    if (typeof value === "string" && value.startsWith("Today")) return value;
     return new Date(value).toLocaleString([], {
       month: "short",
       day: "numeric",
@@ -767,17 +590,17 @@ function AlertsPage({
       <div className="alert-stats">
         <div className="alert-stat-card">
           <span>Total Alerts</span>
-          <strong>{totalAlerts}</strong>
+          <strong>{loading ? "..." : totalAlerts}</strong>
         </div>
 
         <div className="alert-stat-card active-stat">
           <span>Active Leaks</span>
-          <strong>{activeAlerts}</strong>
+          <strong>{loading ? "..." : activeAlerts}</strong>
         </div>
 
         <div className="alert-stat-card resolved-stat">
           <span>Resolved</span>
-          <strong>{resolvedAlerts}</strong>
+          <strong>{loading ? "..." : resolvedAlerts}</strong>
         </div>
       </div>
 
@@ -799,40 +622,46 @@ function AlertsPage({
       {/* ALERT LIST + DETAILS */}
       <div className={`alerts-content ${selectedAlert ? "has-details" : ""}`}>
         <div className="alerts-list">
-          {filteredAlerts.map((alert) => (
-            <div
-              key={alert.id}
-              onClick={() => setSelectedAlert(alert)}
-              className={`alert-card ${
-                selectedAlert?.id === alert.id ? "selected" : ""
-              } ${
-                alert.state === "active"
-                  ? "alert-active"
-                  : "alert-resolved"
-              }`}
-            >
-              <div className="alert-icon">
-                {alert.state === "active" ? <AlertTriangle size={18} /> : <ShieldCheck size={18} />}
-              </div>
-
-              <div className="alert-info">
-                <strong>
-                  {alert.node} — {alert.title}
-                </strong>
-                <span>{alert.description}</span>
-              </div>
-
+          {filteredAlerts.length > 0 ? (
+            filteredAlerts.map((alert) => (
               <div
-                className={`status-badge ${
+                key={alert.id}
+                onClick={() => setSelectedAlert(alert)}
+                className={`alert-card ${
+                  selectedAlert?.id === alert.id ? "selected" : ""
+                } ${
                   alert.state === "active"
-                    ? "status-active"
-                    : "status-resolved"
+                    ? "alert-active"
+                    : "alert-resolved"
                 }`}
               >
-                ● {alert.state === "active" ? "LEAK DETECTED" : "RESOLVED"}
+                <div className="alert-icon">
+                  {alert.state === "active" ? <AlertTriangle size={18} /> : <ShieldCheck size={18} />}
+                </div>
+
+                <div className="alert-info">
+                  <strong>
+                    {alert.node} — {alert.title}
+                  </strong>
+                  <span>{alert.description}</span>
+                </div>
+
+                <div
+                  className={`status-badge ${
+                    alert.state === "active"
+                      ? "status-active"
+                      : "status-resolved"
+                  }`}
+                >
+                  ● {alert.state === "active" ? "LEAK DETECTED" : "RESOLVED"}
+                </div>
               </div>
+            ))
+          ) : (
+            <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
+              {loading ? "Loading alerts from PostgreSQL..." : "No alerts match the selected filter."}
             </div>
-          ))}
+          )}
         </div>
 
         {/* DETAILS PANEL ONLY APPEARS AFTER CLICKING AN ALERT */}
@@ -888,16 +717,18 @@ function AlertsPage({
               <div className="detail-item">
                 <span>Severity</span>
                 <strong>
-                  {selectedAlert.severity.charAt(0).toUpperCase() +
-                    selectedAlert.severity.slice(1)}
+                  {selectedAlert.severity
+                    ? selectedAlert.severity.charAt(0).toUpperCase() + selectedAlert.severity.slice(1)
+                    : "Warning"}
                 </strong>
               </div>
 
               <div className="detail-item">
                 <span>Status</span>
                 <strong>
-                  {selectedAlert.state.charAt(0).toUpperCase() +
-                    selectedAlert.state.slice(1)}
+                  {selectedAlert.state
+                    ? selectedAlert.state.charAt(0).toUpperCase() + selectedAlert.state.slice(1)
+                    : "Active"}
                 </strong>
               </div>
 
@@ -928,26 +759,15 @@ function AlertsPage({
   );
 }
 
-const MOCK_HISTORY = [
-  { id: "h001", time: "Today, 01:05 PM", node: "Node 03", event: "Leak Event Detected", status: "leak" },
-  { id: "h002", time: "Today, 12:58 PM", node: "Node 02", event: "Leak Event Detected", status: "leak" },
-  { id: "h003", time: "Today, 12:45 PM", node: "Node 05", event: "Leak Event Detected", status: "leak" },
-  { id: "h004", time: "Today, 12:32 PM", node: "Node 04", event: "Leak Alert Resolved", status: "normal" },
-  { id: "h005", time: "Today, 12:20 PM", node: "Node 01", event: "Leak Alert Resolved", status: "normal" },
-  { id: "h006", time: "Today, 11:45 AM", node: "Node 08", event: "Routine Operational Scan", status: "normal" },
-  { id: "h007", time: "Today, 11:10 AM", node: "Node 12", event: "Routine Operational Scan", status: "normal" },
-  { id: "h008", time: "Today, 10:30 AM", node: "Node 06", event: "Routine Operational Scan", status: "normal" },
-  { id: "h009", time: "Today, 09:50 AM", node: "Node 07", event: "Routine Operational Scan", status: "normal" },
-  { id: "h010", time: "Today, 09:15 AM", node: "Node 09", event: "Routine Operational Scan", status: "normal" },
-  { id: "h011", time: "Yesterday, 05:20 PM", node: "Node 10", event: "Routine Operational Scan", status: "normal" },
-  { id: "h012", time: "Yesterday, 04:10 PM", node: "Node 11", event: "Routine Operational Scan", status: "normal" },
-];
+/* =========================================================
+   HISTORY PAGE
+   ========================================================= */
 
-function HistoryPage() {
+function HistoryPage({ historyRecords = [], nodes = [] }) {
   const [filterNode, setFilterNode] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
-  const filteredRows = MOCK_HISTORY.filter((item) => {
+  const filteredRows = historyRecords.filter((item) => {
     if (filterNode !== "all" && item.node !== filterNode) return false;
     if (filterStatus !== "all" && item.status !== filterStatus) return false;
     return true;
@@ -966,7 +786,7 @@ function HistoryPage() {
             onChange={(e) => setFilterNode(e.target.value)}
           >
             <option value="all">All Nodes</option>
-            {NODES_DATA.map((node) => (
+            {nodes.map((node) => (
               <option key={node.id} value={node.id}>
                 {node.name}
               </option>
@@ -1031,121 +851,6 @@ function HistoryPage() {
       </div>
 
     </section>
-  );
-}
-
-/* =========================================================
-   DEVICE
-   ========================================================= */
-
-function DevicePage() {
-  return (
-    <section>
-
-      <div className="device-grid">
-
-        <DeviceCard
-          icon={<Cpu size={27} />}
-          title="ESP32 Microcontroller"
-          subtitle="Main Processing & Wireless Unit"
-          details={[
-            ["Hardware Status", "Online & Operational"],
-            ["System Uptime", "99.98%"],
-            ["Firmware", "v2.4.1 Stable"],
-            ["Wi-Fi Connectivity", "Connected (-58 dBm)"],
-          ]}
-        />
-
-        <DeviceCard
-          icon={<Mic2 size={27} />}
-          title="INMP441 Sensor Array"
-          subtitle="Digital Acoustic Microphones"
-          details={[
-            ["Sensor Status", "Active Sampling"],
-            ["Sampling Frequency", "44.1 kHz"],
-            ["Audio Interface", "I2S Digital Signal"],
-            ["Array Sensitivity", "Omnidirectional"],
-          ]}
-        />
-
-        <DeviceCard
-          icon={<Cloud size={27} />}
-          title="System Gateway"
-          subtitle="Real-time Data Pipeline"
-          details={[
-            ["Gateway Status", "Connected"],
-            ["Protocol", "MQTT / WebSockets"],
-            ["Cloud Sync", "Active"],
-            ["Encryption", "TLS 1.3 Secure"],
-          ]}
-        />
-
-      </div>
-
-    </section>
-  );
-}
-
-/* =========================================================
-   SMALL COMPONENTS
-   ========================================================= */
-
-function InfoRow({
-  label,
-  value,
-  green,
-}) {
-  return (
-    <div className="info-row">
-
-      <span>{label}</span>
-
-      <strong
-        className={
-          green ? "green-text" : ""
-        }
-      >
-        {value}
-      </strong>
-
-    </div>
-  );
-}
-
-function DeviceCard({
-  icon,
-  title,
-  subtitle,
-  details,
-}) {
-  return (
-    <div className="panel device-card">
-
-      <div className="device-main-icon">
-        {icon}
-      </div>
-
-      <h3>{title}</h3>
-
-      <p>{subtitle}</p>
-
-      <div className="device-details">
-
-        {details.map(
-          ([label, value]) => (
-            <div key={label}>
-
-              <span>{label}</span>
-
-              <strong>{value}</strong>
-
-            </div>
-          )
-        )}
-
-      </div>
-
-    </div>
   );
 }
 

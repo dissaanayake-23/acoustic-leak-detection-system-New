@@ -1,0 +1,20 @@
+{
+  "name": "compressed-air-backend",
+  "version": "1.0.0",
+  "description": "Backend for Compressed Air Leak Detection System with Railway PostgreSQL & Socket.io",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "seed": "node src/seed.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mqtt": "^5.16.0",
+    "pg": "^8.13.1",
+    "socket.io": "^4.8.1"
+  }
+}
